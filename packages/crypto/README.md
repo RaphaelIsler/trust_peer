@@ -14,14 +14,6 @@ Features:
 
 Beispiel:
 
-```rust
-use crypto::{checksum_sha3_256, KeyStore};
-
-let db = KeyStore::new("./keys.db")?;
-let meta = db.create_ed25519_key()?;
-let sig = db.sign(&meta.id, b"hello")?;
-let ok = db.verify(&meta.id, b"hello", &sig)?;
-```
 
 ## Algorithm Support
 

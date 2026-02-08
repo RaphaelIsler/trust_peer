@@ -2,6 +2,11 @@
 use ed25519_dalek::{SigningKey, Signer, SECRET_KEY_LENGTH};
 use rand::RngCore;
 use rand::rngs::OsRng;
+use sqlx::{Decode, Encode, Sqlite, Type};
+use sqlx::encode::IsNull;
+use sqlx::sqlite::{SqliteArgumentValue, SqliteTypeInfo, SqliteValueRef};
+use std::borrow::Cow;
+use std::error::Error as StdError;
 
 /// Private Key structure for ed25519 (32 bytes secret key)
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -47,5 +52,31 @@ impl PrivateKey {
         );
         let sig = signing_key.sign(data);
         Ok(crate::Signature(sig.to_bytes().to_vec()))
+    }
+}
+
+impl Type<Sqlite> for PrivateKey {
+    fn type_info() -> SqliteTypeInfo {
+        <Vec<u8> as Type<Sqlite>>::type_info()
+    }
+
+    fn compatible(ty: &SqliteTypeInfo) -> bool {
+        <Vec<u8> as Type<Sqlite>>::compatible(ty)
+    }
+}
+
+impl<'r> Decode<'r, Sqlite> for PrivateKey {
+    fn decode(value: SqliteValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
+        let bytes = <Vec<u8> as Decode<Sqlite>>::decode(value)?;
+        Ok(PrivateKey(bytes))
+    }
+}
+
+impl<'q> Encode<'q, Sqlite> for PrivateKey {
+    fn encode_by_ref(&self, args: &mut Vec<SqliteArgumentValue<'q>>) -> Result<IsNull, Box<dyn StdError + Send + Sync>> {
+        args.push(SqliteArgumentValue::Blob(Cow::Owned(
+            self.0.to_vec(),
+        )));
+        Ok(IsNull::No)
     }
 }

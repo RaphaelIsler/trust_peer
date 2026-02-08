@@ -7,15 +7,18 @@ edition = "2021"
 dioxus = { workspace = true, features = ["fullstack"] }
 crypto = { path = "../crypto", optional = true }
 blockchain = { path = "../blockchain", optional = true }
+users = { path = "../users", optional = true }
 serde = { version = "1.0", features = ["derive"] }
 anyhow = "1.0"
 tokio = { version = "1.42", features = ["full"], optional = true }
+chrono = { version = "0.4", optional = true }
 
 [features]
 default = []
 server = ["dioxus/server", "tokio", "crypto", "blockchain"]
 web = ["dioxus/web"]
-desktop = ["dioxus/desktop"]
+desktop = ["dioxus/desktop", "users", "chrono", "tokio"]
+mobile = ["dioxus/mobile", "users", "chrono", "tokio"]
 
 # Multiple binaries for different platforms
 [[bin]]
@@ -32,3 +35,8 @@ required-features = ["web"]
 name = "desktop"
 path = "src/bin/desktop.rs"
 required-features = ["desktop"]
+
+[[bin]]
+name = "mobile"
+path = "src/bin/mobile.rs"
+required-features = ["mobile"]

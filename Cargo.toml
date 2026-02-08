@@ -3,7 +3,9 @@ resolver = "2"
 members = [
     "packages/app",
     "packages/blockchain",
-    "packages/crypto"
+    "packages/crypto",
+    "packages/db",
+    "packages/users"
 ]
 
 [workspace.dependencies]

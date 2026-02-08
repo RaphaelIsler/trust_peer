@@ -29,6 +29,15 @@
             "problemMatcher": ["$rustc"]
         },
         {
+            "label": "Build: app (mobile)",
+            "type": "shell",
+            "command": "cargo",
+            "args": ["build", "-p", "app", "--features", "mobile", "--bin", "mobile"],
+            "group": "build",
+            "presentation": {"reveal": "always", "panel": "dedicated"},
+            "problemMatcher": ["$rustc"]
+        },
+        {
             "label": "Build: blockchain",
             "type": "shell",
             "command": "cargo",
@@ -47,11 +56,20 @@
             "problemMatcher": ["$rustc"]
         },
         {
+            "label": "Build: users",
+            "type": "shell",
+            "command": "cargo",
+            "args": ["build", "-p", "users"],
+            "group": "build",
+            "presentation": {"reveal": "always", "panel": "dedicated"},
+            "problemMatcher": ["$rustc"]
+        },
+        {
             "label": "Build: All Packages",
             "type": "shell",
             "command": "cargo",
             "args": ["build", "--workspace"],
-            "group": {"kind": "build", "isDefault": true},
+            "group": {"kind": "build"},
             "presentation": {"reveal": "always", "panel": "dedicated"},
             "problemMatcher": ["$rustc"]
         },
@@ -60,6 +78,15 @@
             "type": "shell",
             "command": "cargo",
             "args": ["test", "-p", "crypto"],
+            "group": "test",
+            "presentation": {"reveal": "always", "panel": "dedicated"},
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "label": "Test: users",
+            "type": "shell",
+            "command": "cargo",
+            "args": ["test", "-p", "users"],
             "group": "test",
             "presentation": {"reveal": "always", "panel": "dedicated"},
             "problemMatcher": ["$rustc"]

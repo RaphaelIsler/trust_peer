@@ -1,3 +1,9 @@
+use sqlx::{Decode, Encode, Sqlite, Type};
+use sqlx::encode::IsNull;
+use sqlx::sqlite::{SqliteArgumentValue, SqliteTypeInfo, SqliteValueRef};
+use std::borrow::Cow;
+use std::error::Error as StdError;
+
 /// Public Key structure for ed25519 (32 bytes)
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PublicKey(pub Vec<u8>);
@@ -30,5 +36,31 @@ impl PublicKey {
 
         verifying_key.verify(data, &sig)?;
         Ok(())
+    }
+}
+
+impl Type<Sqlite> for PublicKey {
+    fn type_info() -> SqliteTypeInfo {
+        <Vec<u8> as Type<Sqlite>>::type_info()
+    }
+
+    fn compatible(ty: &SqliteTypeInfo) -> bool {
+        <Vec<u8> as Type<Sqlite>>::compatible(ty)
+    }
+}
+
+impl<'r> Decode<'r, Sqlite> for PublicKey {
+    fn decode(value: SqliteValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
+        let bytes = <Vec<u8> as Decode<Sqlite>>::decode(value)?;
+        Ok(PublicKey(bytes))
+    }
+}
+
+impl<'q> Encode<'q, Sqlite> for PublicKey {
+    fn encode_by_ref(&self, args: &mut Vec<SqliteArgumentValue<'q>>) -> Result<IsNull, Box<dyn StdError + Send + Sync>> {
+        args.push(SqliteArgumentValue::Blob(Cow::Owned(
+            self.0.to_vec(),
+        )));
+        Ok(IsNull::No)
     }
 }

@@ -1,0 +1,128 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Desktop",
+            "cargo": {
+                "args": [
+                    "build",
+                    "-p",
+                    "app",
+                    "--bin",
+                    "desktop",
+                    "--features",
+                    "desktop"
+                ],
+                "filter": {
+                    "name": "desktop",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Run Desktop",
+            "program": "${workspaceFolder}/target/debug/desktop",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "Build: app (desktop)"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Server",
+            "cargo": {
+                "args": [
+                    "build",
+                    "-p",
+                    "app",
+                    "--bin",
+                    "server",
+                    "--features",
+                    "server"
+                ],
+                "filter": {
+                    "name": "server",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Run Web (dx serve)",
+            "runtimeExecutable": "dx",
+            "runtimeArgs": [
+                "serve",
+                "--platform",
+                "web",
+                "--bin",
+                "web",
+                "--features",
+                "web"
+            ],
+            "cwd": "${workspaceFolder}/packages/app",
+            "console": "integratedTerminal",
+            "serverReadyAction": {
+                "pattern": "listening on (.+)",
+                "uriFormat": "%s",
+                "action": "openExternally"
+            }
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Run Desktop (dx serve)",
+            "runtimeExecutable": "dx",
+            "runtimeArgs": [
+                "serve",
+                "--platform",
+                "desktop",
+                "--bin",
+                "desktop",
+                "--features",
+                "desktop"
+            ],
+            "cwd": "${workspaceFolder}/packages/app",
+            "console": "integratedTerminal"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Run Android (dx serve)",
+            "runtimeExecutable": "dx",
+            "runtimeArgs": [
+                "serve",
+                "--platform",
+                "android"
+            ],
+            "cwd": "${workspaceFolder}/packages/app",
+            "console": "integratedTerminal",
+            "env": {
+                "ANDROID_HOME": "${env:ANDROID_HOME}",
+                "ANDROID_SDK_ROOT": "${env:ANDROID_SDK_ROOT}"
+            }
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Build Android APK",
+            "runtimeExecutable": "dx",
+            "runtimeArgs": [
+                "build",
+                "--platform",
+                "android",
+                "--release"
+            ],
+            "cwd": "${workspaceFolder}/packages/app",
+            "console": "integratedTerminal"
+        }
+    ]
+}
