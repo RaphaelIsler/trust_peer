@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 crypto = { path = "../crypto" }
-ui = { workspace = true }
 helper = { git = "https://bitbucket.org/revwork/rust_helper.git", package = "rust_helper", features=["uuid", "backend"] }
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.10"

@@ -1,8 +1,8 @@
-//! This crate contains all shared fullstack server functions.
+//! Server functions - These run only on the server but are callable from the client
 use dioxus::prelude::*;
 
 /// Echo the user input on the server.
-#[post("/api/echo")]
+#[server]
 pub async fn echo(input: String) -> Result<String, ServerFnError> {
     Ok(input)
 }
