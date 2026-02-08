@@ -97,7 +97,7 @@ impl db::DbEntity for KeyMeta {
     }
 
     async fn update_table(_conn: &SqlitePool, _from_version: u32, _to_version: u32) -> Result<()> {
-        // Keine Migrationen erforderlich (noch)
+        // No migrations required (yet)
         Ok(())
     }
 

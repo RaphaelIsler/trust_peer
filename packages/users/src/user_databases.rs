@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::{User, UserId};
 use db::DbEntity;
 
-/// Verwaltet die private und öffentliche Datenbank eines Benutzers
+/// Manages the private and public databases of a user
 pub struct UserDatabases {
     user_id: UserId,
     private_db: db::DB,
@@ -11,12 +11,12 @@ pub struct UserDatabases {
 }
 
 impl UserDatabases {
-    /// Öffnet oder erstellt beide Datenbanken für einen Benutzer
+    /// Opens or creates both databases for a user
     pub async fn open<P: AsRef<Path>>(base_path: P, user_id: &UserId) -> Result<Self> {
         let base_path = base_path.as_ref();
         let user_dir = base_path.join(user_id.inner().to_string());
 
-        // Erstelle Benutzer-Verzeichnis
+        // Create user directory
         std::fs::create_dir_all(&user_dir)?;
 
         let private_db_path = user_dir.join("private.sqlite");
@@ -37,9 +37,9 @@ impl UserDatabases {
         Ok(dbs)
     }
 
-    /// Initialisiert die private Datenbank (enthält Benutzerinfo, Keys, Blockchains)
+    /// Initializes the private database (contains user info, keys, blockchains)
     async fn init_private_db(&mut self) -> Result<()> {
-        // User Tabelle über User DbEntity
+        // User table via User DbEntity
         self.private_db.migrate_table::<User>().await?;
         self.private_db.migrate_table::<crypto::KeyMeta>().await?;
         self.private_db.migrate_table::<blockchain::Blockchain>().await?;
@@ -47,50 +47,50 @@ impl UserDatabases {
         Ok(())
     }
 
-    /// Initialisiert die öffentliche Datenbank (nur Blockchains)
+    /// Initializes the public database (only blockchains)
     async fn init_public_db(&mut self) -> Result<()> {
-        // Blockchains Tabelle über Blockchain DbEntity
+        // Blockchains table via Blockchain DbEntity
         self.public_db.migrate_table::<blockchain::Blockchain>().await?;
         Ok(())
     }
 
-    /// Gibt Referenz zur privaten Datenbank zurück
+    /// Returns reference to the private database
     pub fn private_db(&self) -> &db::DB {
         &self.private_db
     }
 
-    /// Gibt Referenz zur öffentlichen Datenbank zurück
+    /// Returns reference to the public database
     pub fn public_db(&self) -> &db::DB {
         &self.public_db
     }
 
-    /// Gibt den Pfad zur privaten DB zurück
+    /// Returns the path to the private database
     pub fn private_db_path(&self) -> &Path {
         self.private_db.path()
     }
 
-    /// Gibt den Pfad zur öffentlichen DB zurück
+    /// Returns the path to the public database
     pub fn public_db_path(&self) -> &Path {
         self.public_db.path()
     }
 
-    /// Speichert Benutzerinformationen in der privaten DB
+    /// Saves user information to the private database
     pub async fn save_user_info(&self, user: &User) -> Result<()> {
         user.write(self.private_db.connection()).await?;
         Ok(())
     }
 
-    /// Lädt Benutzerinformationen aus der privaten DB
+    /// Loads user information from the private database
     pub async fn load_user_info(&self) -> Result<Option<User>> {
         User::read(self.private_db.connection(), &self.user_id).await
     }
 
-    /// Erstellt ein neues ed25519 Schlüsselpaar und speichert es in der privaten DB
+    /// Creates a new ed25519 key pair and saves it to the private database
     pub async fn add_key_pair(&self) -> Result<crypto::KeyMeta> {
         crypto::KeyMeta::create_ed25519(self.private_db.connection()).await
     }
 
-    /// Listet alle Schlüssel auf (aus private DB)
+    /// Lists all keys (from private database)
     pub async fn list_keys(&self) -> Result<Vec<crypto::KeyMeta>> {
         crypto::KeyMeta::list(self.private_db.connection()).await
     }

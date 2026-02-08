@@ -11,12 +11,12 @@ pub struct DB {
 }
 
 impl DB {
-    /// Öffnet eine Datenbank an dem angegebenen Pfad
-    /// Erstellt die Datei, falls sie nicht existiert
+    /// Opens a database at the specified path
+    /// Creates the file if it doesn't exist
     pub async fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let db_path = path.as_ref().to_path_buf();
 
-        // Erstelle das übergeordnete Verzeichnis, falls es nicht existiert
+        // Create the parent directory if it doesn't exist
         if let Some(parent) = db_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -53,17 +53,17 @@ impl DB {
         Ok(())
     }
 
-    /// Gibt eine Referenz zur Connection zurück
+    /// Returns a reference to the connection
     pub fn connection(&self) -> &SqlitePool {
         &self.connection
     }
 
-    /// Gibt den Pfad zur Datenbank zurück
+    /// Returns the path to the database
     pub fn path(&self) -> &Path {
         &self.db_path
     }
 
-    /// Gibt die aktuelle Migrations-Version für eine Tabelle zurück
+    /// Returns the current migration version for a table
     async fn get_migration_version(&self, table_name: &str) -> Result<u32> {
         let version: Option<i64> = sqlx::query_scalar(
             "SELECT version FROM schema_migrations WHERE table_name = ?",
@@ -75,7 +75,7 @@ impl DB {
         Ok(version.unwrap_or(0) as u32)
     }
 
-    /// Setzt die Migrations-Version für eine Tabelle
+    /// Sets the migration version for a table
     async fn set_migration_version(&self, table_name: &str, version: u32) -> Result<()> {
         let timestamp = chrono::Utc::now().timestamp();
         sqlx::query(
@@ -89,15 +89,15 @@ impl DB {
         Ok(())
     }
 
-    /// Migriert eine Tabelle für den angegebenen DbEntity-Typ
-    /// Erstellt die Tabelle, falls sie nicht existiert, oder führt Migrationen durch
+    /// Migrates a table for the specified DbEntity type
+    /// Creates the table if it doesn't exist, or performs migrations
     pub async fn migrate_table<T: DbEntity>(&self) -> Result<()> {
         let table_name = T::table_name();
         let target_version = T::schema_version();
         let current_version = self.get_migration_version(table_name).await?;
 
         if current_version == 0 {
-            // Tabelle existiert nicht, erstelle sie
+            // Table doesn't exist, create it
             T::create_table(&self.connection).await?;
             self.set_migration_version(table_name, target_version).await?;
         } else if current_version < target_version {

@@ -5,31 +5,31 @@ use sqlx::{Row, SqlitePool};
 
 pub type UserId = helper::UId<User>;
 
-/// Repräsentiert einen Benutzer im System
+/// Represents a user in the system
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct User {
-    /// Eindeutige Benutzer-ID
+    /// Unique user ID
     pub id: UserId,
 
-    /// Vorname (erforderlich)
+    /// First name (required)
     pub first_name: String,
 
-    /// Nachname (erforderlich)
+    /// Last name (required)
     pub last_name: String,
 
-    /// Optionaler zweiter Vorname
+    /// Optional middle name
     pub middle_name: Option<String>,
 
-    /// Geburtsdatum
+    /// Date of birth
     pub date_of_birth: NaiveDate,
 
-    /// Erstellungszeitpunkt
+    /// Creation timestamp
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
 
 impl User {
-    /// Erstellt einen neuen Benutzer
+    /// Creates a new user
     pub fn new(
         first_name: String,
         last_name: String,
@@ -48,12 +48,12 @@ impl User {
         })
     }
 
-    /// Gibt die ID zurück
+    /// Returns the ID
     pub fn id(&self) -> &UserId {
         &self.id
     }
 
-    /// Gibt den vollständigen Namen zurück
+    /// Returns the full name
     pub fn full_name(&self) -> String {
         if let Some(ref middle) = self.middle_name {
             format!("{} {} {}", self.first_name, middle, self.last_name)
@@ -62,25 +62,25 @@ impl User {
         }
     }
 
-    /// Validiert die Benutzerdaten
+    /// Validates the user data
     pub fn validate(&self) -> crate::Result<()> {
         if self.first_name.trim().is_empty() {
             return Err(crate::UserError::InvalidData(
-                "Vorname darf nicht leer sein".to_string(),
+                "First name cannot be empty".to_string(),
             ));
         }
 
         if self.last_name.trim().is_empty() {
             return Err(crate::UserError::InvalidData(
-                "Nachname darf nicht leer sein".to_string(),
+                "Last name cannot be empty".to_string(),
             ));
         }
 
-        // Prüfe ob Geburtsdatum in der Vergangenheit liegt
+        // Check if date of birth is in the past
         let today = chrono::Utc::now().date_naive();
         if self.date_of_birth >= today {
             return Err(crate::UserError::InvalidData(
-                "Geburtsdatum muss in der Vergangenheit liegen".to_string(),
+                "Date of birth must be in the past".to_string(),
             ));
         }
 

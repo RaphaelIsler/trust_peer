@@ -41,9 +41,9 @@ pub fn UserManager() -> Element {
                         onclick: move |_| show_form.set(!show_form()),
                         style: "padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;",
                         if show_form() {
-                            "Formular schließen"
+                            "Close Form"
                         } else {
-                            "Neuen Benutzer erstellen"
+                            "Create New User"
                         }
                     }
                 }
@@ -62,11 +62,11 @@ pub fn UserManager() -> Element {
                 }
 
                 div { class: "user-list",
-                    h3 { "Registrierte Benutzer ({users.read().len()})" }
+                    h3 { "Registered Users ({users.read().len()})" }
 
                     if users.read().is_empty() {
                         p { style: "color: #666; font-style: italic;",
-                            "Keine Benutzer vorhanden. Erstelle einen neuen Benutzer."
+                            "No users available. Create a new user."
                         }
                     }
 
@@ -82,13 +82,13 @@ pub fn UserManager() -> Element {
     {
         rsx! {
             div {
-                p { "Benutzerverwaltung ist nur für Desktop und Mobile verfügbar." }
+                p { "User management is only available for Desktop and Mobile." }
             }
         }
     }
 }
 
-/// Formular zum Erstellen eines neuen Benutzers
+/// Form for creating a new user
 #[component]
 fn UserForm(on_submit: EventHandler<User>, on_error: EventHandler<String>) -> Element {
     let mut first_name = use_signal(|| String::new());
@@ -104,14 +104,14 @@ fn UserForm(on_submit: EventHandler<User>, on_error: EventHandler<String>) -> El
             let date_str = birth_date();
 
             if first.trim().is_empty() || last.trim().is_empty() || date_str.trim().is_empty() {
-                on_error.call("Bitte alle Pflichtfelder ausfüllen".to_string());
+                on_error.call("Please fill in all required fields".to_string());
                 return;
             }
 
             let date = match NaiveDate::parse_from_str(&date_str, "%Y-%m-%d") {
                 Ok(d) => d,
                 Err(_) => {
-                    on_error.call("Ungültiges Datumsformat. Verwende YYYY-MM-DD".to_string());
+                    on_error.call("Invalid date format. Use YYYY-MM-DD".to_string());
                     return;
                 }
             };
@@ -131,7 +131,7 @@ fn UserForm(on_submit: EventHandler<User>, on_error: EventHandler<String>) -> El
                     on_submit.call(user);
                 }
                 Err(e) => {
-                    on_error.call(format!("Fehler beim Erstellen: {}", e));
+                    on_error.call(format!("Error creating user: {}", e));
                 }
             }
         });
@@ -142,11 +142,11 @@ fn UserForm(on_submit: EventHandler<User>, on_error: EventHandler<String>) -> El
             class: "user-form",
             style: "background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 8px;",
 
-            h3 { "Neuen Benutzer erstellen" }
+            h3 { "Create New User" }
 
             div { style: "margin: 10px 0;",
                 label { style: "display: block; margin-bottom: 5px; font-weight: bold;",
-                    "Vorname *"
+                    "First Name *"
                 }
                 input {
                     r#type: "text",
@@ -159,7 +159,7 @@ fn UserForm(on_submit: EventHandler<User>, on_error: EventHandler<String>) -> El
 
             div { style: "margin: 10px 0;",
                 label { style: "display: block; margin-bottom: 5px; font-weight: bold;",
-                    "Nachname *"
+                    "Last Name *"
                 }
                 input {
                     r#type: "text",
@@ -172,7 +172,7 @@ fn UserForm(on_submit: EventHandler<User>, on_error: EventHandler<String>) -> El
 
             div { style: "margin: 10px 0;",
                 label { style: "display: block; margin-bottom: 5px; font-weight: bold;",
-                    "Zweiter Vorname (optional)"
+                    "Middle Name (optional)"
                 }
                 input {
                     r#type: "text",
@@ -185,7 +185,7 @@ fn UserForm(on_submit: EventHandler<User>, on_error: EventHandler<String>) -> El
 
             div { style: "margin: 10px 0;",
                 label { style: "display: block; margin-bottom: 5px; font-weight: bold;",
-                    "Geburtsdatum * (YYYY-MM-DD)"
+                    "Date of Birth * (YYYY-MM-DD)"
                 }
                 input {
                     r#type: "date",
@@ -198,13 +198,13 @@ fn UserForm(on_submit: EventHandler<User>, on_error: EventHandler<String>) -> El
             button {
                 onclick: handle_submit,
                 style: "padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;",
-                "Benutzer erstellen"
+                "Create User"
             }
         }
     }
 }
 
-/// Karte zur Anzeige eines Benutzers
+/// Card for displaying a user
 #[component]
 fn UserCard(user: User) -> Element {
     let mut show_details = use_signal(|| false);
@@ -218,14 +218,14 @@ fn UserCard(user: User) -> Element {
                 div {
                     h4 { style: "margin: 0 0 5px 0;", "{user.full_name()}" }
                     p { style: "margin: 0; color: #666; font-size: 0.9em;",
-                        "Geburtsdatum: {user.date_of_birth}"
+                        "Date of Birth: {user.date_of_birth}"
                     }
                 }
                 button {
                     onclick: move |_| show_details.set(!show_details()),
                     style: "padding: 5px 15px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;",
                     if show_details() {
-                        "Weniger"
+                        "Less"
                     } else {
                         "Details"
                     }
@@ -241,7 +241,7 @@ fn UserCard(user: User) -> Element {
                     }
 
                     div { style: "margin: 10px 0;",
-                        strong { "Erstellt am: " }
+                        strong { "Created at:" }
                         span { style: "font-size: 0.9em;", "{user.created_at.to_rfc2822()}" }
                     }
                 }
@@ -250,7 +250,7 @@ fn UserCard(user: User) -> Element {
     }
 }
 
-// Hilfsfunktionen für Datenbankoperationen
+// Helper functions for database operations
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 async fn load_users() -> anyhow::Result<Vec<User>> {
     use crate::user_init::get_db_path;

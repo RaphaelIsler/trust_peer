@@ -4,7 +4,7 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::path::{Path, PathBuf};
 use crate::{User, UserId, Result, UserError, UserDatabases};
 
-/// Zentrale Verwaltung aller Benutzer
+/// Central management of all users
 pub struct UserDatabase {
     pool: SqlitePool,
     db_path: PathBuf,

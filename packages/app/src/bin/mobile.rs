@@ -4,9 +4,9 @@ use app::{Echo, Hero, UserManager};
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 
 fn main() {
-    // Initialisiere Benutzerdatenbank beim Start
+    // Initialize user database at startup
     if let Err(e) = init_database() {
-        eprintln!("Fehler beim Initialisieren der Datenbank: {}", e);
+        eprintln!("Error initializing database: {}", e);
     }
 
     dioxus::launch(App);
