@@ -1,0 +1,30 @@
+[package]
+name = "crypto"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sha3 = "0.10"
+hex = "0.4"
+tokio-rusqlite = "0.6"
+rand = "0.8"
+rand_core = "0.6"
+uuid = { version = "1.11", features = ["v4"] }
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+sha2 = "0.10"
+
+# ed25519 is an optional feature (enabled by default)
+ed25519-dalek = { version = "2.1", optional = true }
+
+# optional post-quantum support (requires liboqs/tooling to be available at build)
+oqs = { version = "0.6", optional = true }
+
+[features]
+default = ["ed25519"]
+ed25519 = ["ed25519-dalek"]
+pq = ["oqs"]
+
+[dev-dependencies]
+tempfile = "3.14"
+tokio = { version = "1.42", features = ["macros", "rt-multi-thread"] }
