@@ -5,7 +5,8 @@ members = [
     "packages/blockchain",
     "packages/crypto",
     "packages/db",
-    "packages/users"
+    "packages/users",
+    "packages/p2p_webrtc"
 ]
 
 [workspace.dependencies]
