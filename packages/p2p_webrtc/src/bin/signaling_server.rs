@@ -18,40 +18,8 @@ use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, RwLock};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
+use p2p_webrtc::signaling::SignalingMessage;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum SignalingMessage {
-    #[serde(rename = "join")]
-    Join { room_id: String, peer_id: String },
-    #[serde(rename = "offer")]
-    Offer {
-        from: String,
-        to: String,
-        sdp: String,
-    },
-    #[serde(rename = "answer")]
-    Answer {
-        from: String,
-        to: String,
-        sdp: String,
-    },
-    #[serde(rename = "ice")]
-    IceCandidate {
-        from: String,
-        to: String,
-        candidate: String,
-        sdp_mid: String,
-        sdp_mline_index: u32,
-    },
-    #[serde(rename = "peer_joined")]
-    PeerJoined { peer_id: String },
-    #[serde(rename = "peer_left")]
-    PeerLeft { peer_id: String },
-    #[serde(rename = "ping")]
-    Ping,
-    #[serde(rename = "pong")]
-    Pong,
-}
 
 type PeerMap = Arc<RwLock<HashMap<String, mpsc::UnboundedSender<SignalingMessage>>>>;
 type RoomMap = Arc<RwLock<HashMap<String, PeerMap>>>;
@@ -141,6 +109,7 @@ async fn handle_client(stream: TcpStream, rooms: RoomMap) {
                                                 info!("Notifying peer {} of new peer {}", other_id, peer_id);
                                                 let _ = other_tx.send(SignalingMessage::PeerJoined {
                                                     peer_id: peer_id.clone(),
+                                                    do_initiation: true,
                                                 });
                                             }
                                         }
@@ -155,6 +124,7 @@ async fn handle_client(stream: TcpStream, rooms: RoomMap) {
                                             if other_id != &peer_id {
                                                 let _ = tx.send(SignalingMessage::PeerJoined {
                                                     peer_id: other_id.clone(),
+                                                    do_initiation: false
                                                 });
                                             }
                                         }

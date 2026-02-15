@@ -33,7 +33,10 @@ pub struct TurnServer {
 impl Default for IceServersConfig {
     fn default() -> Self {
         Self {
-            stun_servers: vec![],
+            stun_servers: vec![
+                "stun:stun.l.google.com:19302".to_string(),
+                "stun:stun1.l.google.com:19302".to_string(),
+            ],
             turn_servers: vec![],
         }
     }
@@ -147,6 +150,8 @@ impl PeerConnection {
             .set_local_description(answer.clone())
             .await
             .map_err(|e| Error::WebRtc(format!("Failed to set local description: {}", e)))?;
+
+        debug!("Answer done");
 
         Ok(answer.sdp)
     }

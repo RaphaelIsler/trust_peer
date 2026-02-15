@@ -11,13 +11,21 @@ use webrtc::data_channel::RTCDataChannel;
 use webrtc::peer_connection::RTCPeerConnection;
 
 /// DataChannel wrapper for sending and receiving messages
+#[derive(Clone)]
 pub struct DataChannel {
     channel: Arc<RTCDataChannel>,
+    pub own_peer_id: String,
+    pub remote_peer_id: String,
 }
 
 impl DataChannel {
     /// Get or create a DataChannel named "data"
-    pub async fn get_or_create(peer: Arc<RTCPeerConnection>, is_initiator: bool) -> Result<Self> {
+    pub async fn get_or_create(
+        peer: Arc<RTCPeerConnection>,
+        is_initiator: bool,
+        own_peer_id: String,
+        remote_peer_id: String,
+    ) -> Result<Self> {
         if is_initiator {
             // Initiator creates the DataChannel
             debug!("Creating DataChannel 'data' (initiator)");
@@ -32,6 +40,8 @@ impl DataChannel {
             info!("DataChannel created successfully");
             Ok(Self {
                 channel: data_channel,
+                own_peer_id,
+                remote_peer_id,
             })
         } else {
             // Responder waits for incoming DataChannel
@@ -70,6 +80,8 @@ impl DataChannel {
             info!("DataChannel received successfully");
             Ok(Self {
                 channel: data_channel,
+                own_peer_id,
+                remote_peer_id,
             })
         }
     }

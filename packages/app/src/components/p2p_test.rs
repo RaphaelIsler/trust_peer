@@ -91,7 +91,7 @@ pub fn P2PTestComponent() -> Element {
                                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
                                 if let Some(arc) = p2p_instance() {
-                                    let mut p2p_guard = arc.lock().await;
+                                    let p2p_guard = arc.lock().await;
                                     match p2p_guard.try_recv().await {
                                         Ok(Some(data)) => {
                                             if let Ok(text) = String::from_utf8(data) {
@@ -135,7 +135,7 @@ pub fn P2PTestComponent() -> Element {
                 }
 
                 if let Some(p2p_arc) = p2p_instance() {
-                    let mut p2p = p2p_arc.lock().await;
+                    let p2p = p2p_arc.lock().await;
                     match p2p.send(msg.as_bytes()).await {
                         Ok(_) => {
                             info!("[P2P] Sent message: {}", msg);
@@ -316,7 +316,7 @@ pub fn P2PTestComponent() -> Element {
                                         }
 
                                         if let Some(p2p_arc) = p2p_instance() {
-                                            let mut p2p = p2p_arc.lock().await;
+                                            let p2p = p2p_arc.lock().await;
                                             match p2p.send(msg.as_bytes()).await {
                                                 Ok(_) => {
                                                     info!("[P2P] Sent message: {}", msg);

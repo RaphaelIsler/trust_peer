@@ -141,7 +141,7 @@
             "console": "integratedTerminal"
         },
         {
-            "type": "lldb",
+            "type": "node",
             "request": "launch",
             "name": "Setup P2P Test (Signaling + 2x Desktop)",
             "preLaunchTask": "Setup P2P Test Environment",
