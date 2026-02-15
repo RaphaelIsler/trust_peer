@@ -17,7 +17,7 @@ use webrtc::peer_connection::RTCPeerConnection;
 /// Configuration for ICE servers
 #[derive(Debug, Clone)]
 pub struct IceServersConfig {
-    /// STUN servers (e.g., "stun:stun.l.google.com:19302")
+    /// STUN servers (e.g., "stun:stun.example.com:3478")
     pub stun_servers: Vec<String>,
     /// TURN servers with credentials
     pub turn_servers: Vec<TurnServer>,
@@ -33,10 +33,7 @@ pub struct TurnServer {
 impl Default for IceServersConfig {
     fn default() -> Self {
         Self {
-            stun_servers: vec![
-                "stun:stun.l.google.com:19302".to_string(),
-                "stun:stun1.l.google.com:19302".to_string(),
-            ],
+            stun_servers: vec![],
             turn_servers: vec![],
         }
     }

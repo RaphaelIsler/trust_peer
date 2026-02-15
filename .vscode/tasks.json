@@ -108,6 +108,34 @@
             "group": {"kind": "test", "isDefault": true},
             "presentation": {"reveal": "always", "panel": "dedicated"},
             "problemMatcher": ["$rustc"]
+        },
+        {
+            "label": "Build: p2p_webrtc signaling_server",
+            "type": "shell",
+            "command": "cargo",
+            "args": ["build", "-p", "p2p_webrtc", "--bin", "signaling_server"],
+            "group": "build",
+            "presentation": {"reveal": "always", "panel": "dedicated"},
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "label": "Setup P2P Test Environment",
+            "type": "shell",
+            "command": "${workspaceFolder}/.vscode/scripts/start_p2p_test.sh",
+            "presentation": {"reveal": "always", "panel": "new"},
+            "isBackground": true,
+            "runOptions": {"runOn": "folderOpen"},
+            "problemMatcher": {
+                "pattern": {
+                    "regexp": "^(.*)$",
+                    "file": 1
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "🔨 Building binaries...",
+                    "endsPattern": "To stop:"
+                }
+            }
         }
     ]
 }

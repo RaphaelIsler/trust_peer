@@ -34,10 +34,7 @@ async fn main() -> anyhow::Result<()> {
     // Create configuration
     let config = P2pConfig::new(signaling_server, room_id)
         .with_timeout(30)
-        .with_stun_servers(vec![
-            "stun:stun.l.google.com:19302".to_string(),
-            "stun:stun1.l.google.com:19302".to_string(),
-        ]);
+        .with_stun_servers(vec![]);
 
     // Create P2P handler
     let mut p2p = P2pWebRtc::new(config);

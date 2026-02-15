@@ -8,6 +8,7 @@ use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
@@ -69,31 +70,23 @@ pub enum SignalingMessage {
 
 /// Signaling client for WebSocket connection to signaling server
 pub struct SignalingClient {
-    sink: Option<WsSink>,
-    stream_rx: Option<WsStream2>,
+    sink: Arc<tokio::sync::Mutex<Option<WsSink>>>,
+    stream_rx: Arc<tokio::sync::Mutex<Option<WsStream2>>>,
     tx: mpsc::UnboundedSender<SignalingMessage>,
-    rx: mpsc::UnboundedReceiver<SignalingMessage>,
     room_id: String,
     peer_id: String,
 }
 
 impl SignalingClient {
     /// Create a new signaling client (but don't connect yet)
-    pub fn new(room_id: String, peer_id: String) -> (Self, mpsc::UnboundedReceiver<SignalingMessage>) {
-        let (_tx, rx) = mpsc::unbounded_channel();
-        let (_rx_out, rx_in) = mpsc::unbounded_channel();
-
-        (
-            Self {
-                sink: None,
-                stream_rx: None,
-                tx: _rx_out,
-                rx: rx_in,
-                room_id,
-                peer_id,
-            },
-            rx,
-        )
+    pub fn new(room_id: String, peer_id: String, tx: mpsc::UnboundedSender<SignalingMessage>) -> Self {
+        Self {
+            sink: Arc::new(tokio::sync::Mutex::new(None)),
+            stream_rx: Arc::new(tokio::sync::Mutex::new(None)),
+            tx,
+            room_id,
+            peer_id,
+        }
     }
 
     /// Connect to the signaling server
@@ -108,8 +101,8 @@ impl SignalingClient {
             .map_err(|e| Error::Signaling(format!("Failed to connect to signaling server: {}", e)))?;
 
         let (sink, stream) = ws_stream.split();
-        self.sink = Some(sink);
-        self.stream_rx = Some(stream);
+        *self.sink.lock().await = Some(sink);
+        *self.stream_rx.lock().await = Some(stream);
 
         info!("Connected to signaling server");
 
@@ -124,10 +117,10 @@ impl SignalingClient {
     }
 
     /// Send a signaling message
-    pub async fn send_message(&mut self, msg: SignalingMessage) -> Result<()> {
+    pub async fn send_message(&self, msg: SignalingMessage) -> Result<()> {
         debug!("Sending signaling message: {:?}", msg);
 
-        if let Some(sink) = &mut self.sink {
+        if let Some(sink) = &mut *self.sink.lock().await {
             let json = serde_json::to_string(&msg)?;
             sink.send(Message::Text(json))
                 .await
@@ -142,24 +135,28 @@ impl SignalingClient {
     }
 
     /// Receive signaling messages in a loop (should be spawned as a task)
-    pub async fn receive_loop(&mut self) -> Result<()> {
-        if let Some(stream) = self.stream_rx.take() {
+    pub async fn receive_loop(&self) -> Result<()> {
+        info!("receive_loop started");
+        if let Some(stream) = self.stream_rx.lock().await.take() {
             let mut stream = stream;
             let tx = self.tx.clone();
 
             loop {
                 match stream.next().await {
                     Some(Ok(Message::Text(text))) => {
-                        debug!("Received signaling message: {}", text);
+                        debug!("Received raw WebSocket text: {}", text);
                         match serde_json::from_str::<SignalingMessage>(&text) {
                             Ok(msg) => {
+                                info!("Parsed signaling message: {:?}", msg);
                                 if let Err(e) = tx.send(msg) {
-                                    error!("Failed to forward signaling message: {}", e);
+                                    error!("Failed to forward signaling message to channel: {}", e);
                                     break;
+                                } else {
+                                    debug!("Successfully forwarded message to channel");
                                 }
                             }
                             Err(e) => {
-                                warn!("Failed to parse signaling message: {}", e);
+                                warn!("Failed to parse signaling message: {} - text was: {}", e, text);
                             }
                         }
                     }
@@ -182,10 +179,5 @@ impl SignalingClient {
             }
         }
         Ok(())
-    }
-
-    /// Get the next signaling message (non-blocking)
-    pub fn try_recv(&mut self) -> Option<SignalingMessage> {
-        self.rx.try_recv().ok()
     }
 }

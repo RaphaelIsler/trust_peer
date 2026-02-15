@@ -115,8 +115,7 @@ async fn main() -> anyhow::Result<()> {
 ```rust
 let config = P2pConfig::new(server_url, room_id)
     .with_stun_servers(vec![
-        "stun:stun.l.google.com:19302".to_string(),
-        "stun:stun1.l.google.com:19302".to_string(),
+
     ])
     .with_turn_server(
         vec!["turn:turnserver.example.com:3478".to_string()],
@@ -267,7 +266,7 @@ Log output includes:
 **Problem**: ICE gathering takes too long or fails
 
 **Solutions**:
-1. Test STUN server: `nc -u stun.l.google.com 19302`
+1. Test STUN server: `nc -u <stun-server> <port>`
 2. Use multiple STUN servers for redundancy
 3. Configure TURN server as fallback
 

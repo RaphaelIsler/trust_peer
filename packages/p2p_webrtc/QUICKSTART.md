@@ -118,7 +118,7 @@ P2pWebRtc API (api.rs)
 
 ## Common Configurations
 
-### Simple (Google's STUN only)
+### Simple (with default config)
 ```rust
 P2pConfig::new(url, room)
 ```

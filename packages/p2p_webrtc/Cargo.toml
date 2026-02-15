@@ -26,3 +26,11 @@ tokio-test = "0.4"
 default = ["mobile"]
 mobile = []
 desktop = []
+
+[[bin]]
+name = "signaling_server"
+path = "src/bin/signaling_server.rs"
+
+[[example]]
+name = "p2p_demo"
+path = "examples/p2p_demo.rs"

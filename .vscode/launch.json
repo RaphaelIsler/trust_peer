@@ -21,7 +21,10 @@
                 }
             },
             "args": [],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "LD_PRELOAD": "/lib/x86_64-linux-gnu/libpthread.so.0"
+            }
         },
         {
             "type": "lldb",
@@ -30,7 +33,10 @@
             "program": "${workspaceFolder}/target/debug/desktop",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "Build: app (desktop)"
+            "preLaunchTask": "Build: app (desktop)",
+            "env": {
+                "LD_PRELOAD": "/lib/x86_64-linux-gnu/libpthread.so.0"
+            }
         },
         {
             "type": "lldb",
@@ -123,6 +129,24 @@
             ],
             "cwd": "${workspaceFolder}/packages/app",
             "console": "integratedTerminal"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Run Signaling Server",
+            "program": "${workspaceFolder}/target/debug/signaling_server",
+            "args": ["3000"],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "Build: p2p_webrtc signaling_server",
+            "console": "integratedTerminal"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Setup P2P Test (Signaling + 2x Desktop)",
+            "preLaunchTask": "Setup P2P Test Environment",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen"
         }
     ]
 }

@@ -1,9 +1,14 @@
 use dioxus::prelude::*;
-use app::{Echo, Hero, UserManager};
+use app::{Hero, P2PTestComponent, UserManager};
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 
 fn main() {
+    // Initialize logging
+    env_logger::Builder::from_default_env()
+        .filter_level(log::LevelFilter::Debug)
+        .init();
+
     // Initialize user database at startup
     if let Err(e) = init_database() {
         eprintln!("Error initializing database: {}", e);
@@ -30,6 +35,6 @@ fn App() -> Element {
 
         Hero {}
         UserManager {}
-        Echo {}
+        P2PTestComponent {}
     }
 }

@@ -8,17 +8,20 @@ dioxus = { workspace = true, features = ["fullstack"] }
 crypto = { path = "../crypto", optional = true }
 blockchain = { path = "../blockchain", optional = true }
 users = { path = "../users", optional = true }
+p2p_webrtc = { path = "../p2p_webrtc", optional = true }
 serde = { version = "1.0", features = ["derive"] }
 anyhow = "1.0"
 tokio = { version = "1.42", features = ["full"], optional = true }
 chrono = { version = "0.4", optional = true }
+log = "0.4"
+env_logger = "0.11"
 
 [features]
 default = []
 server = ["dioxus/server", "tokio", "crypto", "blockchain"]
 web = ["dioxus/web"]
-desktop = ["dioxus/desktop", "users", "chrono", "tokio"]
-mobile = ["dioxus/mobile", "users", "chrono", "tokio"]
+desktop = ["dioxus/desktop", "users", "chrono", "tokio", "p2p_webrtc"]
+mobile = ["dioxus/mobile", "users", "chrono", "tokio", "p2p_webrtc"]
 
 # Multiple binaries for different platforms
 [[bin]]

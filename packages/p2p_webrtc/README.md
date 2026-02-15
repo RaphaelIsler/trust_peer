@@ -65,7 +65,7 @@ Configuration builder for P2P connections:
 ```rust
 let config = P2pConfig::new(signaling_server, room_id)
     .with_timeout(30)
-    .with_stun_servers(vec!["stun:stun.l.google.com:19302".to_string()])
+    .with_stun_servers(vec![])
     .with_turn_server(
         vec!["turn:example.com".to_string()],
         "username".to_string(),
@@ -166,8 +166,7 @@ Used for peer discovery and public IP address detection:
 
 ```rust
 config.with_stun_servers(vec![
-    "stun:stun.l.google.com:19302".to_string(),
-    "stun:stun1.l.google.com:19302".to_string(),
+
 ])
 ```
 
@@ -257,7 +256,7 @@ Output includes:
 ### Connection Timeouts
 
 1. Check signaling server is running and accessible
-2. Verify STUN server is reachable (test with `nc -u stun.l.google.com 19302`)
+2. Verify STUN server is reachable (test with a public STUN server)
 3. Increase timeout: `config.with_timeout(60)`
 
 ### DataChannel Not Opening

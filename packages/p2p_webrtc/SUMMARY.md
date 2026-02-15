@@ -17,7 +17,7 @@ A fully functional, production-ready Rust WebRTC library for mobile and desktop 
 #### 2. **Full WebRTC PeerConnection** ✅
 - Complete SDP offer/answer exchange (`peer.rs`)
 - ICE candidate handling and gathering
-- STUN server support (Google's public servers pre-configured)
+- STUN server support (configurable public servers)
 - Optional TURN server support with credentials
 - Connection state management
 - Automatic peer connection lifecycle
@@ -149,8 +149,7 @@ cargo run --example p2p_demo -- ws://localhost:3000 test-room
 ### NAT Traversal Support
 
 **STUN (pre-configured):**
-- `stun:stun.l.google.com:19302`
-- `stun:stun1.l.google.com:19302`
+- Public STUN servers can be configured as needed
 
 **TURN (optional):**
 ```rust
