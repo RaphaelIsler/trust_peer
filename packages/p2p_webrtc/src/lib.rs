@@ -11,6 +11,7 @@ pub mod api;
 
 pub use api::{P2pWebRtc, P2pConfig};
 pub use error::{Error, Result};
+pub use peer::IceCandidate;
 
 use log::info;
 

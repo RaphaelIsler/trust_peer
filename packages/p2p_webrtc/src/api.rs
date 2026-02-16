@@ -38,7 +38,7 @@ impl P2pConfig {
             room_id,
             peer_id: None,
             ice_config: IceServersConfig::default(),
-            connection_timeout: 30,
+            connection_timeout: 60,
         }
     }
 
@@ -122,14 +122,14 @@ impl P2pWebRtc {
         );
 
         // Establish connection and get data_channel arc and remote_peer_id
-        let rx = {
-            let (_, rx) = mpsc::unbounded_channel();
-            std::mem::replace(&mut self.signaling_rx, rx)
-        };
+  //      let rx = {
+    //        let (_, rx) = mpsc::unbounded_channel();
+    //        std::mem::replace(&mut self.signaling_rx, rx)
+     //   };
         self.data_channel = Some(signaling
             .establish_connection(
                 &self.config.signaling_server,
-                rx,
+//                rx,
                 Duration::from_secs(self.config.connection_timeout),
             )
             .await?);

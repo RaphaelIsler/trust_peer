@@ -6,13 +6,23 @@
 use crate::error::{Error, Result};
 use log::{debug, info};
 use std::sync::Arc;
+use tokio::sync::mpsc;
 use webrtc::api::setting_engine::SettingEngine;
 use webrtc::api::APIBuilder;
+use webrtc::ice_transport::ice_candidate::RTCIceCandidateInit;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
+
+/// ICE candidate information
+#[derive(Debug, Clone)]
+pub struct IceCandidate {
+    pub candidate: String,
+    pub sdp_mid: String,
+    pub sdp_mline_index: u32,
+}
 
 /// Configuration for ICE servers
 #[derive(Debug, Clone)]
@@ -46,11 +56,13 @@ impl Default for IceServersConfig {
 pub struct PeerConnection {
     peer: Arc<RTCPeerConnection>,
     is_initiator: bool,
+    ice_tx: mpsc::UnboundedSender<Option<IceCandidate>>,
 }
 
 impl PeerConnection {
     /// Create a new WebRTC peer connection
-    pub async fn new(is_initiator: bool, ice_config: IceServersConfig) -> Result<Self> {
+    /// Returns (PeerConnection, ICE candidate receiver)
+    pub async fn new(is_initiator: bool, ice_config: IceServersConfig) -> Result<(Self, mpsc::UnboundedReceiver<Option<IceCandidate>>)> {
         info!("Creating WebRTC peer connection (initiator: {})", is_initiator);
 
         // Configure ICE servers
@@ -92,10 +104,52 @@ impl PeerConnection {
             .await
             .map_err(|e| Error::WebRtc(format!("Failed to create peer connection: {}", e)))?;
 
-        Ok(Self {
-            peer: Arc::new(peer),
+        let peer = Arc::new(peer);
+        let (ice_tx, ice_rx) = mpsc::unbounded_channel();
+
+        // Register ICE candidate callback
+        {
+            let ice_tx_clone = ice_tx.clone();
+            peer.on_ice_candidate(Box::new(move |candidate| {
+                if let Some(candidate) = candidate {
+                    debug!("ICE candidate discovered: {} {}", candidate.foundation, candidate.address);
+                    // Construct candidate string from components
+                    let candidate_type = match candidate.typ {
+                        webrtc::ice_transport::ice_candidate_type::RTCIceCandidateType::Host => "host",
+                        webrtc::ice_transport::ice_candidate_type::RTCIceCandidateType::Srflx => "srflx",
+                        webrtc::ice_transport::ice_candidate_type::RTCIceCandidateType::Prflx => "prflx",
+                        webrtc::ice_transport::ice_candidate_type::RTCIceCandidateType::Relay => "relay",
+                        webrtc::ice_transport::ice_candidate_type::RTCIceCandidateType::Unspecified => "unknown",
+                    };
+                    let candidate_str = format!(
+                        "candidate:{} {} {} {} {} {} typ {}",
+                        candidate.foundation,
+                        candidate.component,
+                        candidate.protocol.to_string(),
+                        candidate.priority,
+                        candidate.address,
+                        candidate.port,
+                        candidate_type
+                    );
+                    let ice_candidate = IceCandidate {
+                        candidate: candidate_str,
+                        sdp_mid: String::new(),
+                        sdp_mline_index: 0,
+                    };
+                    let _ = ice_tx_clone.send(Some(ice_candidate));
+                } else {
+                    debug!("ICE candidate gathering complete");
+                    let _ = ice_tx_clone.send(None);
+                }
+                Box::pin(async {})
+            }));
+        }
+
+        Ok((Self {
+            peer,
             is_initiator,
-        })
+            ice_tx,
+        }, ice_rx))
     }
 
     /// Create an SDP offer (initiator only)
@@ -189,10 +243,29 @@ impl PeerConnection {
             candidate, sdp_mid, sdp_mline_index
         );
 
-        // The webrtc-rs crate has a different API for ICE candidates
-        // For now, we'll log and continue - the candidate will be applied through
-        // normal WebRTC signaling
-        debug!("ICE candidate queued ({}): {}", sdp_mid, candidate);
+        let mline_index = u16::try_from(sdp_mline_index).map_err(|_| {
+            Error::WebRtc(format!(
+                "Invalid sdp_mline_index (out of range): {}",
+                sdp_mline_index
+            ))
+        })?;
+
+        let init = RTCIceCandidateInit {
+            candidate: candidate.to_string(),
+            sdp_mid: if sdp_mid.is_empty() {
+                None
+            } else {
+                Some(sdp_mid.to_string())
+            },
+            sdp_mline_index: Some(mline_index),
+            username_fragment: None,
+        };
+
+        self.peer
+            .add_ice_candidate(init)
+            .await
+            .map_err(|e| Error::WebRtc(format!("Failed to add ICE candidate: {}", e)))?;
+
         Ok(())
     }
 

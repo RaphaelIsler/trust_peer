@@ -14,6 +14,7 @@ use core::time;
 use std::sync::Arc;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{connect_async, WebSocketStream};
 
@@ -76,20 +77,23 @@ pub enum SignalingMessage {
 #[derive(Clone)]
 pub enum ConnectionMsg{
     Timeout,
-    DataChannelReady(DataChannel),
+//    DataChannelReady(DataChannel),
     MsgFromSignal(SignalingMessage),
+    SendIceCandidate(SignalingMessage)
 }
 
 /// Signaling client for WebSocket connection to signaling server
 pub struct SignalingClient {
     sink: Arc<tokio::sync::Mutex<Option<WsSink>>>,
   //  stream_rx: Arc<tokio::sync::Mutex<Option<WsStream2>>>,
-    tx: mpsc::UnboundedSender<SignalingMessage>,
+//    tx: mpsc::UnboundedSender<SignalingMessage>,
     ice_config: crate::peer::IceServersConfig,
     room_id: String,
     peer_id: String,
     remote_id: Option<String>,
     peer: Option<crate::peer::PeerConnection>,
+    ice_rx: Option<mpsc::UnboundedReceiver<Option<crate::peer::IceCandidate>>>,
+    data_channel: Option<DataChannel>,
 }
 
 
@@ -99,12 +103,14 @@ impl SignalingClient {
         Self {
             sink: Arc::new(tokio::sync::Mutex::new(None)),
             //stream_rx: Arc::new(tokio::sync::Mutex::new(None)),
-            tx,
+//            tx,
             ice_config,
             room_id,
             peer_id,
             remote_id: None,
             peer: None,
+            ice_rx: None,
+            data_channel: None,
         }
     }
 
@@ -198,17 +204,17 @@ impl SignalingClient {
 
     /// Establish a complete P2P connection with all setup
     pub async fn establish_connection(
-        &mut self,
+        mut self,
         signaling_server: &str,
       //  ice_config: crate::peer::IceServersConfig,
-        rx: mpsc::UnboundedReceiver<SignalingMessage>,
+//        rx: mpsc::UnboundedReceiver<SignalingMessage>,
         connection_timeout: time::Duration
     ) -> Result<DataChannel>
     {
         info!("Establishing P2P connection via signaling");
 
         // Connect to signaling server
-        let mut stream = self.connect(signaling_server).await?;
+        let stream = self.connect(signaling_server).await?;
 
         let (connection_tx, mut connection_rx) = mpsc::unbounded_channel();
         { let connection_tx = connection_tx.clone();
@@ -221,32 +227,6 @@ impl SignalingClient {
             });
         }
 
-        // Create shutdown channel
-//        let (shutdown_signal_tx, shutdown_signal_rx) = mpsc::unbounded_channel();
-
-        // Create remote_peer_id arc that will be filled by signaling_loop
-
-        // Create data_channel arc that will be filled by signaling_loop
-
-        // Start signaling loop in background
-//        let signaling_for_loop = Arc::new(tokio::sync::RwLock::new(self.clone_inner()));
-  //      let peer_id = self.peer_id.clone();
-    //    let peer_id_for_loop = peer_id.clone();
-       /* tokio::spawn(async move {
-            if let Err(e) = Self::signaling_loop(
-                signaling_for_loop,
-                remote_peer_id_for_loop,
-                peer_id_for_loop,
-                ice_config,
-                rx,
-                shutdown_signal_rx,
-                data_channel_for_loop,
-            )
-            .await
-            {
-                error!("Signaling loop error: {}", e);
-            }
-        });*/
 
         // Wait for remote peer ID to be set
         {
@@ -254,6 +234,28 @@ impl SignalingClient {
             tokio::spawn(async move { Self::timeout_task(connection_tx, connection_timeout) });
         }
 
+
+        let (dc_tx, dc_rx) = oneshot::channel();
+
+        // Loop im Hintergrund laufen lassen, damit ICE weiter verarbeitet wird
+        let mut client = self;
+        tokio::spawn(async move {
+            if let Err(e) = client.run_connection_loop(connection_rx, dc_tx).await {
+                error!("Connection loop error: {}", e);
+            }
+        });
+        match dc_rx.await {
+            Ok(dc) => Ok(dc),
+            Err(_) => Err(Error::Timeout),
+        }
+    }
+
+    async fn run_connection_loop(
+        &mut self,
+        mut connection_rx: mpsc::UnboundedReceiver<ConnectionMsg>,
+        mut dc_tx: oneshot::Sender<DataChannel>,
+    ) -> Result<()> {
+        let mut dc_tx = Some(dc_tx);
         loop {
             tokio::select! {
                 // Listen for connection messages
@@ -263,15 +265,21 @@ impl SignalingClient {
                             info!("Received shutdown message, exiting");
                             return Err(Error::Timeout);
                         }
-                        ConnectionMsg::DataChannelReady(dc) => {
-                            info!("Received DataChannel ready message, returning connection");
-                            return Ok(dc);
-                        }
+                       /*  ConnectionMsg::DataChannelReady(dc) => {
+                            if !dc_sent {
+                                info!("Received DataChannel ready message, returning connection");
+                                let _ = dc_tx.send(dc);
+                                dc_sent = true;
+                            }
+                            //return Ok(dc);
+                        }*/
                         ConnectionMsg::MsgFromSignal(msg) => {
                             match self.handle_msg(msg).await {
                                 Ok(Some(dc)) => {
                                     info!("DataChannel is ready, returning connection");
-                                    return Ok(dc);
+                                    if let Some(tx) = dc_tx.take() {
+                                        let _ = tx.send(dc);
+                                    }
                                 }
                                 Ok(None) => {
                                     debug!("Message handled but DataChannel not ready yet");
@@ -281,10 +289,17 @@ impl SignalingClient {
                                 }
                             }
                         }
+                        ConnectionMsg::SendIceCandidate(msg) => {
+                            if let Err(e) = self.send_message(msg).await {
+                                error!("Failed to send ICE candidate message: {}", e);
+                            }
+                        }
                     }
                 }
+                else => break,
             }
         }
+        Ok(())
     }
 
     fn timeout_task(rx: mpsc::UnboundedSender<ConnectionMsg>, timeout: time::Duration) {
@@ -311,15 +326,29 @@ impl SignalingClient {
         match msg {
             SignalingMessage::PeerJoined { peer_id: remote_id, do_initiation: is_initiator } => {
                 if remote_id != self.peer_id {
-                    self.remote_id = Some(remote_id.clone())
-                    ;info!("Peer joined: {} is_initiator: {}", remote_id.clone(), is_initiator);
+                    self.remote_id = Some(remote_id.clone());
+                    info!("Peer joined: {} is_initiator: {}", remote_id.clone(), is_initiator);
 
-                    self.peer = Some(PeerConnection::new(is_initiator, self.ice_config.clone()).await?);
+                    let (peer, ice_rx) = PeerConnection::new(is_initiator, self.ice_config.clone()).await?;
+                    self.peer = Some(peer);
+                    self.ice_rx = Some(ice_rx);
 
                     if is_initiator {
                         info!("Initiator: Creating and sending offer...");
+
+                        // Spawn task to gather and send ICE candidates
+                        self.data_channel = Some(crate::data_channel::DataChannel::get_or_create(
+                            self.peer.as_ref().unwrap().inner(),
+                            true,
+                            self.peer_id.clone(),
+                            remote_id.clone(),
+                        ).await?
+                        );
                         let offer_sdp = self.peer.as_ref().unwrap().create_offer().await?;
                         info!("Offer SDP created, length: {}", offer_sdp.len());
+
+                        self.gather_and_send_ice_candidates().await?;
+
 
                         info!("Sending offer from {} to {}", self.peer_id, remote_id);
                         self.send_message(SignalingMessage::Offer {
@@ -333,6 +362,7 @@ impl SignalingClient {
                                 e
                             })?;
                         info!("Offer sent successfully!");
+
                     } else {
                         info!("Not initiator, waiting for offer from: {}", remote_id);
                     }
@@ -348,11 +378,22 @@ impl SignalingClient {
                     info!("Received offer from: {}", from);
                     self.remote_id = Some(from.clone());
 
-                    self.peer = Some(PeerConnection::new(false, self.ice_config.clone()).await?);
+                    if self.peer.is_none() {
+                        let (peer, ice_rx) = PeerConnection::new(false, self.ice_config.clone()).await?;
+                        self.peer = Some(peer);
+                        self.ice_rx = Some(ice_rx);
+                    }
 
                     info!("Creating answer...");
                     let answer_sdp = self.peer.as_ref().unwrap().create_answer(&offer_sdp).await?;
                     info!("Answer created, length: {}", answer_sdp.len());
+
+                                        // Spawn task to gather and send ICE candidates
+//                    if let Some(ice_rx) = self.ice_rx.take() {
+         //           self.gather_and_send_ice_candidates().await?;
+  //                  }
+
+//                    self.gather_and_send_ice_candidates().await?;
 
                     info!("Sending answer from {} to {}", self.peer_id, from);
                     self.send_message(SignalingMessage::Answer {
@@ -366,6 +407,8 @@ impl SignalingClient {
                             e
                         })?;
                     info!("Answer sent successfully!");
+
+                    self.gather_and_send_ice_candidates().await?;
 
                     if let Some(ref p) = self.peer {
                         info!("Creating data channel for responder...");
@@ -391,6 +434,12 @@ impl SignalingClient {
                     if let Some(ref p) = self.peer {
                         p.set_remote_answer(&answer_sdp).await?;
 
+
+                        if let Some(dc) = self.data_channel.take() {
+                            return Ok(Some(dc));
+                        }
+
+                        //
                         let dc = crate::data_channel::DataChannel::get_or_create(
                             p.inner(),
                             true,
@@ -421,6 +470,45 @@ impl SignalingClient {
             _ => {}
         }
         Ok(None)
+    }
+
+    /// Helper function to gather ICE candidates and send them via signaling
+    async fn gather_and_send_ice_candidates(
+        &mut self,
+//        mut ice_rx: mpsc::UnboundedReceiver<Option<IecCandidate>>,
+  //      peer_id: String,
+    //    remote_id: String,
+//        tx: mpsc::UnboundedSender<SignalingMessage>,
+    ) -> Result<()> {
+        let mut ice_rx = self.ice_rx.take();
+        if let (Some(remote_id), Some(ice_rx)) = (&self.remote_id, &mut ice_rx){
+            while let Some(Some(candidate)) = ice_rx.recv().await {
+                info!(
+                    "Sending ICE candidate from {} to {}: {}",
+                    self.peer_id, remote_id, candidate.candidate
+                );
+                let msg = SignalingMessage::IceCandidate {
+                    from: self.peer_id.clone(),
+                    to: remote_id.clone(),
+                    candidate: candidate.candidate,
+                    sdp_mid: candidate.sdp_mid,
+                    sdp_mline_index: candidate.sdp_mline_index,
+                };
+                self.send_message(msg).await
+                    .map_err(|e| {
+                            error!("Failed to send answer: {}", e);
+                            e
+                        })?;
+
+    //            let _ = tx.send(msg);
+            }
+            debug!("ICE candidate gathering task finished for {}", self.peer_id);
+        } else {
+            warn!("ICE candidate gathering task: no remote_id or ice_rx set");
+
+        }
+        self.ice_rx = ice_rx;
+        Ok(())
     }
 
     // Internal signaling loop - handles all signaling messages and peer connection setup
