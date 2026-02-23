@@ -12,7 +12,7 @@ use crate::{PrivateKey, PublicKey};
 /// Key metadata structure for storing keys in SQLite
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct KeyMeta {
-    pub id: String,
+    pub id: Uuid,
     pub alg: String,
     pub public_key: PublicKey,
     pub private_key: PrivateKey,
@@ -20,11 +20,10 @@ pub struct KeyMeta {
 
 impl KeyMeta {
     #[cfg(feature = "ed25519")]
-    pub async fn create_ed25519(conn: &SqlitePool) -> Result<Self> {
+    pub async fn create_ed25519(id: &Uuid, conn: &SqlitePool) -> Result<Self> {
         let mut secret_bytes = [0u8; SECRET_KEY_LENGTH];
         OsRng.fill_bytes(&mut secret_bytes);
         let signing_key = SigningKey::from_bytes(&secret_bytes);
-        let id = Uuid::new_v4().to_string();
 
         let public_key = PublicKey::from_bytes(&signing_key.verifying_key().to_bytes());
         let private_key = PrivateKey::from_bytes(&signing_key.to_bytes());
@@ -44,7 +43,7 @@ impl KeyMeta {
         .await?;
 
         Ok(KeyMeta {
-            id,
+            id: id.clone(),
             alg: "ed25519".to_string(),
             public_key,
             private_key,
@@ -68,7 +67,7 @@ impl KeyMeta {
 }
 
 impl db::DbEntity for KeyMeta {
-    type Id = String;
+    type Id = Uuid;
 
     fn id(&self) -> &Self::Id {
         &self.id

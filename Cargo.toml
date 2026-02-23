@@ -2,11 +2,13 @@
 resolver = "2"
 members = [
     "packages/app",
+    "packages/api",
     "packages/blockchain",
     "packages/crypto",
+    "packages/coordinator",
     "packages/db",
-    "packages/users",
-    "packages/p2p_webrtc"
+    "packages/p2p_webrtc",
+    "packages/weakup"
 ]
 
 [workspace.dependencies]

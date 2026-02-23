@@ -15,8 +15,7 @@ fn main() {
 fn init_database() -> anyhow::Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
-        let db_path = app::user_init::init_user_database().await?;
-        app::user_init::ensure_test_user(&db_path).await?;
+        let _db_path = app::user_init::init_user_database().await?;
         Ok(())
     })
 }

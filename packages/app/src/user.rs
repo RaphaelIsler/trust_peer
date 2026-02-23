@@ -1,5 +1,4 @@
 use anyhow::Result;
-use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqlitePool};
 
@@ -17,24 +16,15 @@ pub struct User {
     /// Last name (required)
     pub last_name: String,
 
-    /// Optional middle name
-    pub middle_name: Option<String>,
-
-    /// Date of birth
-    pub date_of_birth: NaiveDate,
-
     /// Creation timestamp
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
-
 
 impl User {
     /// Creates a new user
     pub fn new(
         first_name: String,
         last_name: String,
-        middle_name: Option<String>,
-        date_of_birth: NaiveDate,
     ) -> crate::Result<Self> {
         let id = UserId::new();
 
@@ -42,8 +32,6 @@ impl User {
             id,
             first_name,
             last_name,
-            middle_name,
-            date_of_birth,
             created_at: chrono::Utc::now(),
         })
     }
@@ -55,11 +43,7 @@ impl User {
 
     /// Returns the full name
     pub fn full_name(&self) -> String {
-        if let Some(ref middle) = self.middle_name {
-            format!("{} {} {}", self.first_name, middle, self.last_name)
-        } else {
-            format!("{} {}", self.first_name, self.last_name)
-        }
+        format!("{} {}", self.first_name, self.last_name)
     }
 
     /// Validates the user data
@@ -73,14 +57,6 @@ impl User {
         if self.last_name.trim().is_empty() {
             return Err(crate::UserError::InvalidData(
                 "Last name cannot be empty".to_string(),
-            ));
-        }
-
-        // Check if date of birth is in the past
-        let today = chrono::Utc::now().date_naive();
-        if self.date_of_birth >= today {
-            return Err(crate::UserError::InvalidData(
-                "Date of birth must be in the past".to_string(),
             ));
         }
 
@@ -109,8 +85,6 @@ impl db::DbEntity for User {
                 id TEXT PRIMARY KEY,
                 first_name TEXT NOT NULL,
                 last_name TEXT NOT NULL,
-                middle_name TEXT,
-                date_of_birth TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );",
         )
@@ -132,20 +106,16 @@ impl db::DbEntity for User {
         let id = self.id.clone();
         let first_name = self.first_name.clone();
         let last_name = self.last_name.clone();
-        let middle_name = self.middle_name.clone();
-        let date_of_birth = self.date_of_birth.to_string();
         let created_at = self.created_at.to_rfc3339();
 
         sqlx::query(
             "INSERT OR REPLACE INTO users (
-                id, first_name, last_name, middle_name, date_of_birth, created_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                id, first_name, last_name, created_at
+            ) VALUES (?1, ?2, ?3, ?4)",
         )
         .bind(id)
         .bind(first_name)
         .bind(last_name)
-        .bind(middle_name)
-        .bind(date_of_birth)
         .bind(created_at)
         .execute(conn)
         .await?;
@@ -155,7 +125,7 @@ impl db::DbEntity for User {
     async fn read(conn: &SqlitePool, id: &Self::Id) -> Result<Option<Self>> {
         let id = id.clone();
         let row = sqlx::query(
-            "SELECT id, first_name, last_name, middle_name, date_of_birth, created_at
+            "SELECT id, first_name, last_name, created_at
              FROM users WHERE id = ?1",
         )
         .bind(&id)
@@ -163,10 +133,7 @@ impl db::DbEntity for User {
         .await?;
 
         if let Some(row) = row {
-            let date_str: String = row.try_get(4)?;
-            let date_of_birth = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")?;
-
-            let created_str: String = row.try_get(5)?;
+            let created_str: String = row.try_get(3)?;
             let created_at = chrono::DateTime::parse_from_rfc3339(&created_str)?
                 .with_timezone(&chrono::Utc);
 
@@ -174,8 +141,6 @@ impl db::DbEntity for User {
                 id: row.try_get(0)?,
                 first_name: row.try_get(1)?,
                 last_name: row.try_get(2)?,
-                middle_name: row.try_get(3)?,
-                date_of_birth,
                 created_at,
             }))
         } else {
@@ -194,7 +159,7 @@ impl db::DbEntity for User {
 
     async fn list(conn: &SqlitePool) -> anyhow::Result<Vec<Self>> {
         let rows = sqlx::query(
-            "SELECT id, first_name, last_name, middle_name, date_of_birth, created_at
+            "SELECT id, first_name, last_name, created_at
              FROM users ORDER BY last_name, first_name",
         )
         .fetch_all(conn)
@@ -202,10 +167,7 @@ impl db::DbEntity for User {
 
         let mut users = Vec::with_capacity(rows.len());
         for row in rows {
-            let date_str: String = row.try_get(4)?;
-            let date_of_birth = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")?;
-
-            let created_str: String = row.try_get(5)?;
+            let created_str: String = row.try_get(3)?;
             let created_at = chrono::DateTime::parse_from_rfc3339(&created_str)?
                 .with_timezone(&chrono::Utc);
 
@@ -213,8 +175,6 @@ impl db::DbEntity for User {
                 id: row.try_get(0)?,
                 first_name: row.try_get(1)?,
                 last_name: row.try_get(2)?,
-                middle_name: row.try_get(3)?,
-                date_of_birth,
                 created_at,
             });
         }

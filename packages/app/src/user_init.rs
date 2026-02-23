@@ -1,6 +1,5 @@
 use anyhow::Result;
-use chrono::NaiveDate;
-use users::{UserDatabase, User};
+use crate::{Service, User, UserDatabase};
 use std::path::PathBuf;
 
 /// Initializes the user database and returns the path
@@ -51,36 +50,24 @@ pub fn get_db_path() -> Result<PathBuf> {
     Ok(data_dir.join("users.sqlite"))
 }
 
-/// Example: Creates a test user if no users exist yet
-pub async fn ensure_test_user(db_path: &PathBuf) -> Result<()> {
-    let db = UserDatabase::open(db_path).await?;
 
-    let user_count = db.count_users().await?;
-
-    if user_count == 0 {
-        println!("No users found. Creating test user...");
-
-        let (user, _user_dbs) = db.create_user(
-            "Max".to_string(),
-            "Mustermann".to_string(),
-            Some("Alexander".to_string()),
-            NaiveDate::from_ymd_opt(1990, 5, 15)
-                .ok_or_else(|| anyhow::anyhow!("Invalid date"))?,
-        ).await?;
-
-        println!("Test user created:");
-        println!("  Name: {}", user.full_name());
-        println!("  ID: {:?}", user.id);
-    } else {
-        println!("Found users: {}", user_count);
-    }
-
-    Ok(())
-}
 
 /// Lists all users
 pub async fn list_all_users(db_path: &PathBuf) -> Result<Vec<User>> {
     let db = UserDatabase::open(db_path).await?;
     let users = db.list_users().await?;
     Ok(users)
+}
+
+/// Starts a background Service for every user
+pub async fn start_all_user_services(db_path: &PathBuf) -> Result<()> {
+    let db = UserDatabase::open(db_path).await?;
+    let base_path = db.base_data_path().to_path_buf();
+    let users = db.list_users().await?;
+
+    for user in users {
+        Service::start_background(base_path.clone(), user.id.clone());
+    }
+
+    Ok(())
 }

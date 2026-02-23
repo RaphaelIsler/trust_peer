@@ -2,7 +2,7 @@
 
 ## Übersicht
 
-Das `users`-Package bietet eine vollständige Benutzerverwaltung mit folgenden Features:
+Die Benutzerverwaltung ist jetzt direkt im `app`-Package integriert und bietet folgende Features:
 
 - ✅ SQLite-basierte lokale Datenspeicherung (`users.sqlite`)
 - ✅ Automatische Datenbank-Initialisierung beim ersten Start
@@ -22,15 +22,11 @@ pub struct User {
     pub id: UserId,                      // Eindeutige UUID
     pub first_name: String,              // Vorname (Pflicht)
     pub last_name: String,               // Nachname (Pflicht)
-    pub middle_name: Option<String>,     // Zweiter Vorname (optional)
-    pub date_of_birth: NaiveDate,        // Geburtsdatum (Pflicht)
-    pub public_key: String,              // Ed25519 Public Key (Hex)
-    pub private_key: String,             // Ed25519 Private Key (Hex)
-    pub public_blockchain_id: String,    // ID der öffentlichen Blockchain
-    pub private_blockchain_id: String,   // ID der privaten Blockchain
     pub created_at: DateTime<Utc>,       // Erstellungszeitpunkt
 }
 ```
+
+Zusätzliche Profildaten (z. B. `middle_name`, `date_of_birth`) werden pro Benutzer im Service gespeichert (Key-Value-DB), nicht in der zentralen User-Tabelle.
 
 ## Datenspeicherung
 
@@ -49,18 +45,14 @@ pub struct User {
 
 ```
 packages/
-├── users/                    # Benutzerverwaltungs-Package
-│   ├── src/
-│   │   ├── lib.rs           # Public API
-│   │   ├── user.rs          # User-Struct und Logik
-│   │   ├── user_db.rs       # SQLite-Datenbank-Verwaltung
-│   │   └── error.rs         # Fehlertypen
-│   └── Cargo.toml
-│
 └── app/                      # Haupt-Anwendung
     ├── src/
     │   ├── components/
     │   │   └── user_manager.rs  # UI-Komponente für Benutzerverwaltung
+    │   ├── user.rs          # User-Struct und Logik
+    │   ├── user_db.rs       # SQLite-Datenbank-Verwaltung
+    │   ├── user_databases.rs # Private/Public-DBs pro Benutzer
+    │   └── error.rs         # Fehlertypen
     │   ├── user_init.rs     # Initialisierungs-Logik
     │   └── bin/
     │       ├── desktop.rs   # Desktop-Binary
@@ -90,15 +82,7 @@ cargo build -p app --features mobile --bin mobile
 dx build --platform android
 ```
 
-### Nur users-Package bauen
-```bash
-cargo build -p users
-```
 
-### Tests ausführen
-```bash
-cargo test -p users
-```
 
 ## Verwendung
 
@@ -114,7 +98,6 @@ if let Err(e) = init_database() {
 
 fn init_database() -> anyhow::Result<()> {
     let db_path = app::user_init::init_user_database()?;
-    app::user_init::ensure_test_user(&db_path)?;
     Ok(())
 }
 ```
@@ -122,10 +105,10 @@ fn init_database() -> anyhow::Result<()> {
 ### 2. Benutzer erstellen (programmatisch)
 
 ```rust
-use users::{UserDatabase, User};
+use app::{UserDatabase, User};
 use chrono::NaiveDate;
 
-let mut db = UserDatabase::open("~/.trust_peer/data/users.sqlite")?;
+let db = UserDatabase::open("~/.trust_peer/data/users.sqlite").await?;
 
 let user = db.create_user(
     "Max".to_string(),
@@ -135,7 +118,7 @@ let user = db.create_user(
 )?;
 
 println!("Benutzer erstellt: {}", user.full_name());
-println!("Public Key: {}", user.public_key);
+// Keys/Blockchains liegen in den User-Datenbanken (private/public)
 ```
 
 ### 3. UI-Komponente verwenden
@@ -170,12 +153,6 @@ CREATE TABLE users (
     id TEXT PRIMARY KEY,              -- UUID als String
     first_name TEXT NOT NULL,
     last_name TEXT NOT NULL,
-    middle_name TEXT,                 -- Optional
-    date_of_birth TEXT NOT NULL,      -- ISO 8601 Format
-    public_key TEXT NOT NULL,         -- Hex-String
-    private_key TEXT NOT NULL,        -- Hex-String
-    public_blockchain_id TEXT NOT NULL,
-    private_blockchain_id TEXT NOT NULL,
     created_at TEXT NOT NULL          -- RFC 3339 Format
 );
 
@@ -208,11 +185,9 @@ CREATE INDEX idx_users_name ON users(last_name, first_name);
 
 Die folgenden Tasks sind in `.vscode/tasks.json` verfügbar:
 
-- `Build: users` - Baut nur das users-Package
 - `Build: app (desktop)` - Baut die Desktop-App
 - `Build: app (mobile)` - Baut die Mobile-App
-- `Test: users` - Führt Tests für das users-Package aus
 
 ## API-Dokumentation
 
-Ausführliche API-Dokumentation ist im [users/README.md](packages/users/README.md) verfügbar.
+Die Dokumentation zur Benutzerverwaltung liegt im app-Package.

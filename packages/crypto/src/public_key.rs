@@ -37,6 +37,12 @@ impl PublicKey {
         verifying_key.verify(data, &sig)?;
         Ok(())
     }
+
+    /// Encrypt data for this public key
+    #[cfg(feature = "ed25519")]
+    pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
+        crate::sealed_box::seal(self.as_bytes(), plaintext)
+    }
 }
 
 impl Type<Sqlite> for PublicKey {

@@ -20,6 +20,8 @@ pub use signature::Signature;
 mod key_meta;
 pub use key_meta::KeyMeta;
 
+mod sealed_box;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -30,6 +32,19 @@ mod tests {
         let data = b"hello world";
         let hash = Hash::new(data);
         assert_eq!(hash.0.len(), 32);
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_sealed_box_roundtrip() {
+        let private_key = PrivateKey::new();
+        let public_key = private_key.public_key();
+
+        let plaintext = b"secret message";
+        let sealed = public_key.encrypt(plaintext).expect("seal");
+        let opened = private_key.decrypt(&sealed).expect("open");
+
+        assert_eq!(opened, plaintext);
     }
 
 }

@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-use users::{User, UserDatabase};
+use crate::{User, UserDatabase};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 use chrono::NaiveDate;
 
@@ -17,6 +17,15 @@ pub fn UserManager() -> Element {
         // Lade Benutzer beim ersten Render
         use_effect(move || {
             spawn(async move {
+                use crate::user_init::{get_db_path, start_all_user_services};
+
+                if let Ok(db_path) = get_db_path() {
+                    if let Err(e) = start_all_user_services(&db_path).await {
+                        error_message
+                            .set(Some(format!("Fehler beim Starten der Services: {}", e)));
+                    }
+                }
+
                 match load_users().await {
                     Ok(user_list) => users.set(user_list),
                     Err(e) => error_message.set(Some(format!("Fehler beim Laden: {}", e))),
@@ -217,9 +226,6 @@ fn UserCard(user: User) -> Element {
             div { style: "display: flex; justify-content: space-between; align-items: center;",
                 div {
                     h4 { style: "margin: 0 0 5px 0;", "{user.full_name()}" }
-                    p { style: "margin: 0; color: #666; font-size: 0.9em;",
-                        "Date of Birth: {user.date_of_birth}"
-                    }
                 }
                 button {
                     onclick: move |_| show_details.set(!show_details()),
@@ -272,6 +278,6 @@ async fn create_user(
 
     let db_path = get_db_path()?;
     let db = UserDatabase::open(&db_path).await?;
-    let (user, _user_dbs) = db.create_user(first_name, last_name, middle_name, date_of_birth).await?;
+    let user = db.create_user(first_name, last_name, middle_name, date_of_birth).await?;
     Ok(user)
 }

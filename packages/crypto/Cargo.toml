@@ -17,13 +17,17 @@ db = { path = "../db" }
 
 # ed25519 is an optional feature (enabled by default)
 ed25519-dalek = { version = "2.1", optional = true }
+x25519-dalek = { version = "2.0", optional = true }
+curve25519-dalek = { version = "4.1", optional = true }
+hkdf = { version = "0.12", optional = true }
+chacha20poly1305 = { version = "0.10", optional = true }
 
 # optional post-quantum support (requires liboqs/tooling to be available at build)
 oqs = { version = "0.6", optional = true }
 
 [features]
 default = ["ed25519"]
-ed25519 = ["ed25519-dalek"]
+ed25519 = ["ed25519-dalek", "x25519-dalek", "curve25519-dalek", "hkdf", "chacha20poly1305"]
 pq = ["oqs"]
 
 [dev-dependencies]

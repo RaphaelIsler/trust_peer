@@ -73,6 +73,10 @@ src/
 ├── lib.rs              # Root library exports
 ├── server_fn.rs        # Server functions (fullstack)
 ├── user_init.rs        # User initialization
+├── user.rs             # User model
+├── user_db.rs          # User database
+├── user_databases.rs   # Per-user private/public DBs
+├── error.rs            # User error types
 ├── components/         # Reusable UI components
 │   ├── mod.rs
 │   ├── hero.rs         # Hero component
@@ -90,7 +94,7 @@ src/
 
 - **dioxus**: UI framework with fullstack support
 - **p2p_webrtc**: Peer-to-peer WebRTC library (Desktop/Mobile only)
-- **users**: User management library
+- **db**: SQLite wrapper and migrations
 - **tokio**: Async runtime
 - **log**: Structured logging
 - **serde**: Serialization

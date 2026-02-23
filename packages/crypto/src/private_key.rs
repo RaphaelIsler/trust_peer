@@ -53,6 +53,12 @@ impl PrivateKey {
         let sig = signing_key.sign(data);
         Ok(crate::Signature(sig.to_bytes().to_vec()))
     }
+
+    /// Decrypt data that was encrypted for this key's public key
+    #[cfg(feature = "ed25519")]
+    pub fn decrypt(&self, sealed: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
+        crate::sealed_box::open(self.as_bytes(), sealed)
+    }
 }
 
 impl Type<Sqlite> for PrivateKey {

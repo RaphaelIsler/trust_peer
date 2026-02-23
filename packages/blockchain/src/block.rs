@@ -1,4 +1,4 @@
-pub type Id = helper::UId<Block>;
+pub type Id = helper::I64Id<Block>;
 use crate::block_entry::BlockEntry;
 use db::DbEntity;
 
@@ -7,10 +7,9 @@ use crypto::Hash;
 use anyhow::Result;
 use sqlx::{Row, SqlitePool};
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Header{
     pub id: Id,
-    pub prev: Option<Id>,
     pub prev_hash: Hash,
     pub timestamp: u64,
     pub links: Vec<BlockLink>,
@@ -19,8 +18,7 @@ pub struct Header{
 impl Header{
     fn init() -> Self{
         Self{
-            id: Id::new(),
-            prev: None,
+            id: Id::new(0),
             prev_hash: Hash::default(),
             timestamp: chrono::Utc::now().timestamp() as u64,
             links: Vec::new(),
@@ -29,8 +27,7 @@ impl Header{
 
     fn from_block(block: &Block) -> anyhow::Result<Self>{
         Ok(Self{
-            id: Id::new(),
-            prev: Some(block.id().clone()),
+            id: block.id().inc(),
             prev_hash: block.hash()?,
             timestamp: chrono::Utc::now().timestamp() as u64,
             links: Vec::new(),
@@ -38,7 +35,7 @@ impl Header{
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Block{
     pub version: u16,
     pub header: Header,
@@ -95,29 +92,21 @@ impl DbEntity for Block {
     async fn create_table(conn: &SqlitePool) -> Result<()> {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS blocks (
-                id TEXT PRIMARY KEY,
-                blockchain_id TEXT NOT NULL,
+                id INTEGER PRIMARY KEY,
                 version INTEGER NOT NULL,
-                prev_id TEXT,
                 prev_hash BLOB NOT NULL,
                 timestamp INTEGER NOT NULL,
-                data BLOB NOT NULL,
-                created_at INTEGER NOT NULL,
-                FOREIGN KEY(blockchain_id) REFERENCES blockchains(id)
+                data BLOB NOT NULL
             );",
         )
         .execute(conn)
         .await?;
 
         sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_blocks_blockchain ON blocks(blockchain_id, timestamp);",
+            "CREATE INDEX IF NOT EXISTS idx_blocks_timestamp ON blocks(timestamp);",
         )
         .execute(conn)
         .await?;
-
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_blocks_prev ON blocks(prev_id);")
-            .execute(conn)
-            .await?;
         Ok(())
     }
 
@@ -131,27 +120,19 @@ impl DbEntity for Block {
     async fn write(&self, conn: &SqlitePool) -> Result<()> {
         let id = self.id().clone();
         let version = self.version as i64;
-        let prev_id = self.header.prev.clone();
         let prev_hash = self.header.prev_hash.0.to_vec();
         let timestamp = self.header.timestamp as i64;
         let data = bincode::serialize(&self.data)?;
-        let created_at = chrono::Utc::now().timestamp();
-
-        // Blockchain ID needs to be passed separately - for now use empty string
-        let blockchain_id = String::new();
 
         sqlx::query(
-            "INSERT OR REPLACE INTO blocks (id, blockchain_id, version, prev_id, prev_hash, timestamp, data, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO blocks (id, version, prev_hash, timestamp, data)
+               VALUES (?, ?, ?, ?, ?)",
         )
         .bind(id)
-        .bind(blockchain_id)
         .bind(version)
-        .bind(prev_id)
         .bind(prev_hash)
         .bind(timestamp)
         .bind(data)
-        .bind(created_at)
         .execute(conn)
         .await?;
         Ok(())
@@ -161,7 +142,7 @@ impl DbEntity for Block {
         let id = id.clone();
 
         let row = sqlx::query(
-            "SELECT version, prev_id, prev_hash, timestamp, data FROM blocks WHERE id = ?",
+            "SELECT version, prev_hash, timestamp, data FROM blocks WHERE id = ?",
         )
         .bind(&id)
         .fetch_optional(conn)
@@ -169,10 +150,9 @@ impl DbEntity for Block {
 
         if let Some(row) = row {
             let version: i64 = row.try_get(0)?;
-            let prev_id: Option<Id> = row.try_get(1)?;
-            let prev_hash: Vec<u8> = row.try_get(2)?;
-            let timestamp: i64 = row.try_get(3)?;
-            let data_bytes: Vec<u8> = row.try_get(4)?;
+            let prev_hash: Vec<u8> = row.try_get(1)?;
+            let timestamp: i64 = row.try_get(2)?;
+            let data_bytes: Vec<u8> = row.try_get(3)?;
             let data: Vec<BlockEntry> = bincode::deserialize(&data_bytes)?;
 
             let mut prev_hash_array = [0u8; 32];
@@ -182,7 +162,6 @@ impl DbEntity for Block {
                 version: version as u16,
                 header: Header {
                     id: id.clone(),
-                    prev: prev_id,
                     prev_hash: Hash(prev_hash_array),
                     timestamp: timestamp as u64,
                     links: Vec::new(), // Links stored separately
