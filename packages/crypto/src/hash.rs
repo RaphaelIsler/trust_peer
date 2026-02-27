@@ -14,6 +14,10 @@ impl Hash {
         hash.copy_from_slice(&result);
         Self(hash)
     }
+
+    pub fn empty() -> Self {
+        Self([0u8; 32])
+    }
 }
 
 #[cfg(test)]

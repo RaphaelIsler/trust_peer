@@ -1,9 +1,15 @@
 use dioxus::prelude::*;
 
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-use crate::{User, UserDatabase};
+use crate::{Service, User, UserDatabase};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 use chrono::NaiveDate;
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+use blockchain::Block;
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+use blockchain::BlockView;
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+use std::collections::HashMap;
 
 /// Komponente zur Anzeige und Verwaltung von Benutzern
 #[component]
@@ -13,22 +19,31 @@ pub fn UserManager() -> Element {
         let mut users = use_signal(|| Vec::<User>::new());
         let mut show_form = use_signal(|| false);
         let mut error_message = use_signal(|| None::<String>);
-
+        let mut user_services = use_signal(|| HashMap::<String, crate::user_service::Service>::new());
         // Lade Benutzer beim ersten Render
         use_effect(move || {
             spawn(async move {
-                use crate::user_init::{get_db_path, start_all_user_services};
-
-                if let Ok(db_path) = get_db_path() {
-                    if let Err(e) = start_all_user_services(&db_path).await {
-                        error_message
-                            .set(Some(format!("Fehler beim Starten der Services: {}", e)));
+                if let Ok(base_path) = crate::get_data_directory() {
+                    match load_users().await {
+                        Ok(user_list) => {
+                            let mut services_map = user_services.write();
+                            for user in &user_list {
+                                let service = match Service::start(base_path.clone(), &user.id).await {
+                                    Ok(service) => service,
+                                    Err(e) => {
+                                        error_message.set(Some(format!(
+                                            "Fehler beim Starten des Service für {}: {e}",
+                                            user.full_name()
+                                        )));
+                                        continue;
+                                    }
+                                };
+                                services_map.insert(user.id.inner().to_string(), service);
+                            }
+                            users.set(user_list);
+                        }
+                        Err(e) => error_message.set(Some(format!("Fehler beim Laden: {}", e))),
                     }
-                }
-
-                match load_users().await {
-                    Ok(user_list) => users.set(user_list),
-                    Err(e) => error_message.set(Some(format!("Fehler beim Laden: {}", e))),
                 }
             });
         });
@@ -58,9 +73,15 @@ pub fn UserManager() -> Element {
                 }
 
                 if show_form() {
-                    UserForm {
-                        on_submit: move |user| {
+                    CreateUserForm {
+                        on_submit: move |(user, service): (User, crate::user_service::Service)| {
+                            let user_id = user.id.inner().to_string();
                             users.write().push(user);
+                            user_services
+                                .write()
+                                .insert(user_id, service);
+                            let mut user_services = user_services.clone();
+                            let mut error_message = error_message.clone();
                             show_form.set(false);
                             error_message.set(None);
                         },
@@ -80,7 +101,10 @@ pub fn UserManager() -> Element {
                     }
 
                     for user in users.read().iter() {
-                        UserCard { user: user.clone() }
+                        UserCard {
+                            user: user.clone(),
+                            service: user_services().get(&user.id.inner().to_string()).cloned().unwrap(),
+                        }
                     }
                 }
             }
@@ -99,7 +123,7 @@ pub fn UserManager() -> Element {
 
 /// Form for creating a new user
 #[component]
-fn UserForm(on_submit: EventHandler<User>, on_error: EventHandler<String>) -> Element {
+fn CreateUserForm(on_submit: EventHandler<(User, crate::user_service::Service)>, on_error: EventHandler<String>) -> Element {
     let mut first_name = use_signal(|| String::new());
     let mut last_name = use_signal(|| String::new());
     let mut middle_name = use_signal(|| String::new());
@@ -132,12 +156,12 @@ fn UserForm(on_submit: EventHandler<User>, on_error: EventHandler<String>) -> El
             };
 
             match create_user(first, last, middle_opt, date).await {
-                Ok(user) => {
+                Ok((user, service)) => {
                     first_name.set(String::new());
                     last_name.set(String::new());
                     middle_name.set(String::new());
                     birth_date.set(String::new());
-                    on_submit.call(user);
+                    on_submit.call((user, service));
                 }
                 Err(e) => {
                     on_error.call(format!("Error creating user: {}", e));
@@ -215,8 +239,63 @@ fn UserForm(on_submit: EventHandler<User>, on_error: EventHandler<String>) -> El
 
 /// Card for displaying a user
 #[component]
-fn UserCard(user: User) -> Element {
+fn UserCard(user: User, service: Service) -> Element {
     let mut show_details = use_signal(|| false);
+    let mut selected_chain = use_signal(|| None::<blockchain::blockchain::Id>);
+    let mut private_id = use_signal(|| None::<blockchain::blockchain::Id>);
+    let mut public_id = use_signal(|| None::<blockchain::blockchain::Id>);
+    let mut active_chain = use_signal(|| None::<Vec<Block>>);
+    let mut chain_error = use_signal(|| None::<String>);
+    let mut chain_loading = use_signal(|| false);
+
+    if private_id().is_none() {
+        let service = service.clone();
+        spawn(async move {
+            match service.get_private_and_public().await {
+                Ok((p_id, pub_id)) => {private_id.set(Some(p_id)); public_id.set(Some(pub_id));},
+                Err(e) => chain_error.set(Some(format!("Failed to load chain IDs: {e}"))),
+            }
+        });
+    }
+
+/*    spawn(async move {
+        chain.set(service.get_private_and_public().await.unwrap_or_else(|e| {
+            chain_error.set(Some(format!("Failed to load blocks: {e}")));
+            Vec::new()
+        }));
+        selected_chain.set(Some(selection));
+        chain_loading.set(false);
+    });
+*/
+    let chain_error_view = chain_error().map(|err| {
+        rsx! {
+            div { style: "margin: 10px 0; color: #b00020;", "{err}" }
+        }
+    });
+
+    let chain_loading_view = if chain_loading() {
+        Some(rsx! {
+            div { style: "margin: 10px 0; color: #666;", "Loading blockchain..." }
+        })
+    } else {
+        None
+    };
+
+    let chain_view = match active_chain(){
+        Some(blocks) => Some(rsx! {
+            div { class: "blockchain",
+                if blocks.is_empty() {
+                    div { class: "blockchain__empty", "No blocks" }
+                }
+                for (index , block) in blocks.into_iter().enumerate() {
+                    BlockView { index, block }
+                }
+            }
+        }),
+        None => None
+    };
+
+
 
     rsx! {
         div {
@@ -250,6 +329,53 @@ fn UserCard(user: User) -> Element {
                         strong { "Created at:" }
                         span { style: "font-size: 0.9em;", "{user.created_at.to_rfc2822()}" }
                     }
+
+                    div { style: "margin: 16px 0; display: flex; gap: 8px;",
+                        button {
+                            onclick: {
+                                let user_id = user.id.clone();
+                                let active_chain = active_chain.clone();
+                                let selected_chain = selected_chain.clone();
+                                let chain_loading = chain_loading.clone();
+                                let chain_error = chain_error.clone();
+                                let service = service.clone();
+                                move |_| select_chain(
+                                    private_id(),
+                                    active_chain,
+                                    selected_chain,
+                                    chain_loading,
+                                    chain_error,
+                                    service.clone(),
+                                )
+                            },
+                            style: "padding: 6px 12px; background: #0d6efd; color: white; border: none; border-radius: 4px; cursor: pointer;",
+                            "Private Chain"
+                        }
+                        button {
+                            onclick: {
+                                let user_id = user.id.clone();
+                                let active_chain = active_chain.clone();
+                                let selected_chain = selected_chain.clone();
+                                let chain_loading = chain_loading.clone();
+                                let chain_error = chain_error.clone();
+                                let service = service.clone();
+                                move |_| select_chain(
+                                    public_id(),
+                                    active_chain,
+                                    selected_chain,
+                                    chain_loading,
+                                    chain_error,
+                                    service.clone(),
+                                )
+                            },
+                            style: "padding: 6px 12px; background: #6610f2; color: white; border: none; border-radius: 4px; cursor: pointer;",
+                            "Public Chain"
+                        }
+                    }
+
+                    {chain_error_view}
+                    {chain_loading_view}
+                    {chain_view}
                 }
             }
         }
@@ -273,11 +399,38 @@ async fn create_user(
     last_name: String,
     middle_name: Option<String>,
     date_of_birth: NaiveDate,
-) -> anyhow::Result<User> {
+) -> anyhow::Result<(User, Service)> {
     use crate::user_init::get_db_path;
 
     let db_path = get_db_path()?;
     let db = UserDatabase::open(&db_path).await?;
-    let user = db.create_user(first_name, last_name, middle_name, date_of_birth).await?;
-    Ok(user)
+    Ok(db.create_user(first_name, last_name, middle_name, date_of_birth).await?)
+}
+
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+fn select_chain(
+    selection: Option<blockchain::blockchain::Id>,
+    mut chain: Signal<Option<Vec<Block>>>,
+    mut selected_chain: Signal<Option<blockchain::blockchain::Id>>,
+    mut chain_loading: Signal<bool>,
+    mut chain_error: Signal<Option<String>>,
+    service: crate::user_service::Service,
+) {
+    if selection == selected_chain() {
+        return;
+    }
+    if let Some(selection) = selection{
+
+        chain_loading.set(true);
+        chain_error.set(None);
+
+        spawn(async move {
+            chain.set(Some(service.get_blocks(selection, 100, None).await.unwrap_or_else(|e| {
+                chain_error.set(Some(format!("Failed to load blocks: {e}")));
+                Vec::new()
+            })));
+            selected_chain.set(Some(selection));
+            chain_loading.set(false);
+        });
+    }
 }

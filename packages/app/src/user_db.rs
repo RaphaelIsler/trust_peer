@@ -78,7 +78,7 @@ impl UserDatabase {
         last_name: String,
         middle_name: Option<String>,
         date_of_birth: NaiveDate,
-    ) -> Result<User> {
+    ) -> Result<(User, Service)> {
         let user = User::new(first_name, last_name)?;
         user.validate()?;
 
@@ -103,9 +103,8 @@ impl UserDatabase {
         .await?;
 
 
-        Service::start_background(self.base_data_path.clone(), user.id.clone());
 
-        Ok(user)
+        Ok((user, user_service))
     }
 
     pub async fn get_user(&self, id: &UserId) -> Result<User> {

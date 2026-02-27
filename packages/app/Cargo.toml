@@ -9,16 +9,16 @@ crypto = { path = "../crypto", optional = true }
 blockchain = { path = "../blockchain", optional = true }
 db = { path = "../db", optional = true }
 p2p_webrtc = { path = "../p2p_webrtc", optional = true }
-serde = { version = "1.0", features = ["derive"] }
-anyhow = "1.0"
-tokio = { version = "1.42", features = ["full"], optional = true }
-chrono = { version = "0.4", features = ["serde"], optional = true }
-log = "0.4"
-env_logger = "0.11"
-sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "chrono"], optional = true }
-thiserror = { version = "2.0", optional = true }
-helper = { git = "https://bitbucket.org/revwork/rust_helper.git", package = "rust_helper", features = ["uuid", "sqlx"], optional = true }
-uuid = { version = "1.0", features = ["v4"] }
+serde = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+helper = { workspace = true, features = ["uuid", "sqlx", "service"], optional = true }
+uuid = { workspace = true, features = ["v4"] }
 
 [features]
 default = []

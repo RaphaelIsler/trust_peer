@@ -1,6 +1,3 @@
-mod hero;
-pub use hero::Hero;
-
 
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 mod user_manager;

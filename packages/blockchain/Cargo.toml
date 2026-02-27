@@ -6,16 +6,18 @@ edition = "2021"
 [dependencies]
 crypto = { path = "../crypto" }
 db = { path = "../db" }
-helper = { git = "https://bitbucket.org/revwork/rust_helper.git", package = "rust_helper", features=["uuid", "sqlite"] }
-serde = { version = "1.0", features = ["derive"] }
-sha2 = "0.10"
-hex = "0.4"
-bincode = "1.3"
-rand = "0.8"
-chrono = "0.4"
-anyhow = "1.0"
-sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
-tokio = { version = "1.42", features = ["full"] }
-uuid = { version = "1.0", features = ["v4"] }
+helper = { workspace = true, features = ["uuid", "sqlite"] }
+serde = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+bincode = { workspace = true }
+rand = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+dioxus = { workspace = true, features = ["fullstack"] }
+
 [features]
 default = []

@@ -47,7 +47,7 @@ impl User {
     }
 
     /// Validates the user data
-    pub fn validate(&self) -> crate::Result<()> {
+    pub fn validate(&self) -> crate::error::Result<()> {
         if self.first_name.trim().is_empty() {
             return Err(crate::UserError::InvalidData(
                 "First name cannot be empty".to_string(),

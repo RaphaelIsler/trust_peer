@@ -1,27 +1,28 @@
 pub type Id = helper::I64Id<Block>;
 use crate::block_entry::BlockEntry;
+use crate::block_entry::BlockEntryList;
+use crate::block_link::BlockLinkList;
 use db::DbEntity;
 
 use super::BlockLink;
 use crypto::Hash;
 use anyhow::Result;
 use sqlx::{Row, SqlitePool};
+use dioxus::prelude::*;
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Header{
     pub id: Id,
     pub prev_hash: Hash,
     pub timestamp: u64,
-    pub links: Vec<BlockLink>,
 }
 
 impl Header{
-    fn init() -> Self{
+    pub fn init() -> Self{
         Self{
             id: Id::new(0),
-            prev_hash: Hash::default(),
+            prev_hash: Hash::empty(),
             timestamp: chrono::Utc::now().timestamp() as u64,
-            links: Vec::new(),
         }
     }
 
@@ -30,12 +31,11 @@ impl Header{
             id: block.id().inc(),
             prev_hash: block.hash()?,
             timestamp: chrono::Utc::now().timestamp() as u64,
-            links: Vec::new(),
         })
     }
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Block{
     pub version: u16,
     pub header: Header,
@@ -164,7 +164,6 @@ impl DbEntity for Block {
                     id: id.clone(),
                     prev_hash: Hash(prev_hash_array),
                     timestamp: timestamp as u64,
-                    links: Vec::new(), // Links stored separately
                 },
                 data,
             }))
@@ -201,4 +200,50 @@ impl DbEntity for Block {
         }
         Ok(blocks)
     }
+}
+
+#[component]
+pub fn BlockHeaderView(header: Header) -> Element {
+    let prev_hash = hex_preview(&header.prev_hash.0, 12);
+
+    rsx! {
+        div { class: "block-header",
+            div { class: "block-header__row",
+                span { class: "block-header__label", "Timestamp" }
+                span { class: "block-header__value", "{header.timestamp}" }
+            }
+            div { class: "block-header__row",
+                span { class: "block-header__label", "Prev Hash" }
+                span { class: "block-header__value", "{prev_hash}" }
+            }
+        }
+    }
+}
+
+#[component]
+pub fn BlockView(block: Block, index: usize) -> Element {
+    let header = block.header().clone();
+    let entries = block.data().clone();
+    let entry_count = entries.len();
+
+    rsx! {
+        section { class: "block",
+            h3 { class: "block__title", "Block #{index}" }
+            BlockHeaderView { header }
+            div { class: "block__meta", "Entries: {entry_count}" }
+            BlockEntryList { entries }
+        }
+    }
+}
+
+pub(crate) fn hex_preview(bytes: &[u8], max_chars: usize) -> String {
+    let hex = hex::encode(bytes);
+    if hex.len() <= max_chars {
+        return hex;
+    }
+
+    let mut out = String::with_capacity(max_chars + 1);
+    out.push_str(&hex[..max_chars]);
+    out.push('…');
+    out
 }

@@ -6,42 +6,76 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use tokio::task::JoinHandle;
-
+ use tokio::sync::oneshot;
 use crate::{KeyValue, User, UserId};
 
-pub enum Msg {}
+#[derive(helper::ServiceWrapper)]
+pub enum Msg {
+    GetPrivateAndPublic(oneshot::Sender<Result<(blockchain::blockchain::Id, blockchain::blockchain::Id)>>),
+    GetBlocks{id: blockchain::blockchain::Id, count: usize, start_at: Option<usize>, tx: oneshot::Sender<Result<Vec<blockchain::Block>>>},
+}
 
+#[derive(Clone)]
 pub struct Service {
+    tx: tokio::sync::mpsc::Sender<Msg>,
+}
+
+impl PartialEq for Service {
+    fn eq(&self, other: &Self) -> bool {
+        self.tx.same_channel(&other.tx)
+    }
+}
+
+impl Service{
+    pub fn empty() -> Self {
+        let (tx, _rx) = tokio::sync::mpsc::channel(32);
+        Self { tx }
+    }
+
+    pub async fn create_new_instance(
+        base_path: impl AsRef<Path>,
+        user: &User,
+        middle_name: Option<String>,
+        date_of_birth: NaiveDate) -> Result<Self> {
+
+        let mut internal = Internal::create_new_instance(base_path, user, middle_name, date_of_birth).await?;
+        let (tx, rx) = tokio::sync::mpsc::channel(32);
+        tokio::spawn(async move {
+            internal.process(rx).await;
+        });
+        Ok(Self { tx })
+    }
+
+    pub async fn start(base_path: impl AsRef<Path>, user_id: &UserId) -> Result<Self> {
+        let mut internal = Internal::open(base_path, user_id).await?;
+        let (tx, rx) = tokio::sync::mpsc::channel(32);
+        tokio::spawn(async move {
+            internal.process(rx).await;
+        });
+        Ok(Self { tx })
+    }
+}
+
+struct Internal{
     user_id: UserId,
     private_chain_db: db::DB,
     key_db: db::DB,
     public_chain_db: db::DB,
     private_chain: Blockchain,
     public_chain: Blockchain,
-    rx: Option<tokio::sync::mpsc::Receiver<Msg>>,
 }
 
-static SERVICE_REGISTRY: OnceLock<Mutex<HashMap<String, JoinHandle<()>>>> = OnceLock::new();
 
-fn registry() -> &'static Mutex<HashMap<String, JoinHandle<()>>> {
-    SERVICE_REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-impl Service {
+impl Internal {
     /// Opens the user service with a message receiver (used for per-user workers)
-    pub async fn open<P: AsRef<Path>>(
-        base_path: P,
+    pub async fn open(
+        base_path: impl AsRef<Path>,
         user_id: &UserId,
-        rx: tokio::sync::mpsc::Receiver<Msg>,
     ) -> Result<Self> {
-        Self::open_internal(base_path, user_id, Some(rx)).await
+        Self::open_internal(base_path, user_id).await
     }
 
-    /// Opens databases without starting the message processing loop
-    pub async fn open_databases<P: AsRef<Path>>(base_path: P, user_id: &UserId) -> Result<Self> {
-        Self::open_internal(base_path, user_id, None).await
-    }
-
+    /// Should be call on first creation of a user to initialize the databases and create the first blocks
     pub async fn create_new_instance(
         base_path: impl AsRef<Path>,
         user: &User,
@@ -50,7 +84,7 @@ impl Service {
     ) -> Result<Self> {
         let user_id = user.id.clone();
 
-        let mut ret = Self::open_internal(base_path, &user_id, None).await?;
+        let mut ret = Self::open_internal(base_path, &user_id).await?;
         //user.write(ret.key_db.connection()).await?;
 
         if let Some(middle_name) = middle_name {
@@ -64,46 +98,21 @@ impl Service {
             .await?;
 
         let private_pub = ret.add_key_pair(&ret.private_chain.id().inner()).await?;
-        let public_pub = ret.add_key_pair(&ret.public_chain.id().inner()).await?;
         let fist_private = blockchain::BlockEntry::new_verification(&private_pub)?;
+        let first_block = ret.private_chain.append_entries_with_db(vec![fist_private], &ret.private_chain_db).await?;
+
+        let public_pub = ret.add_key_pair(&ret.public_chain.id().inner()).await?;
         let fist_public = blockchain::BlockEntry::new_verification(&public_pub)?;
+        let first_link = blockchain::BlockLink::from_block(ret.private_chain.id(), &first_block)?;
 
-        ret.public_chain.append_entries_with_db(vec![fist_public], &ret.public_chain_db).await?;
-        ret.private_chain.append_entries_with_db(vec![fist_private], &ret.private_chain_db).await?;
+
+        ret.public_chain.append_entries_with_db(vec![fist_public, blockchain::BlockEntry::from_link(first_link)?], &ret.public_chain_db).await?;
         Ok(ret)
-    }
-
-    /// Starts a background service for the given user (no-op if already running)
-    pub fn start_background(base_path: PathBuf, user_id: UserId) {
-        let id_key = user_id.inner().to_string();
-
-        let mut map = registry().lock().expect("service registry lock poisoned");
-        if map.contains_key(&id_key) {
-            return;
-        }
-
-        let task_user_id = user_id.clone();
-        let task_base_path = base_path.clone();
-        let task_key = id_key.clone();
-
-        let handle = tokio::spawn(async move {
-            match Service::open_databases(task_base_path, &task_user_id).await {
-                Ok(service) => service.run().await,
-                Err(e) => eprintln!("Failed to start user service for {task_user_id:?}: {e}"),
-            }
-
-            if let Ok(mut map) = registry().lock() {
-                map.remove(&task_key);
-            }
-        });
-
-        map.insert(id_key, handle);
     }
 
     async fn open_internal<P: AsRef<Path>>(
         base_path: P,
         user_id: &UserId,
-        rx: Option<tokio::sync::mpsc::Receiver<Msg>>,
     ) -> Result<Self> {
         let base_path = base_path.as_ref();
         let user_dir = base_path.join(user_id.inner().to_string());
@@ -132,7 +141,6 @@ impl Service {
             key_db,
             private_chain,
             public_chain,
-            rx,
         })
     }
 
@@ -164,14 +172,28 @@ impl Service {
     async fn add_key_pair(&self, id: &uuid::Uuid) -> Result<crypto::KeyMeta> {
         crypto::KeyMeta::create_ed25519(id, self.key_db.connection()).await
     }
+}
 
+impl Internal{
+    pub async fn process(&mut self, mut rx: tokio::sync::mpsc::Receiver<Msg>) {
+        while let Some(msg) = rx.recv().await {
+            match msg {
+                Msg::GetBlocks{id, count, start_at, tx} => {
+                    if self.private_chain.id() == &id{
+                        let blocks = self.private_chain.block_from(count, start_at).await;
+                        let _ = tx.send(Ok(blocks));
+                    } else if self.public_chain.id() == &id{
+                        let blocks = self.public_chain.block_from(count, start_at).await;
+                        let _ = tx.send(Ok(blocks));
+                    } else {
+                        let _ = tx.send(Err(anyhow::anyhow!("Blockchain not found")));
+                    }
 
-    pub async fn run(mut self) {
-        self.process().await;
-    }
-
-    async fn process(&mut self) {
-        // TODO: Aufträge abarbeiten
-        let _ = self.rx.take();
+                },
+                Msg::GetPrivateAndPublic(tx) => {
+                    let _ = tx.send(Ok((self.private_chain.id().clone(), self.public_chain.id().clone())));
+                }
+            }
+        }
     }
 }
