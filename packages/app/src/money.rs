@@ -31,6 +31,15 @@ impl Default for Money {
 /// - linear_income_rate is income per second (Q32.32)
 /// - interest_rate is continuous rate per second (Q32.32)
 impl Money{
+    pub fn timestamp(self) -> Timestamp {
+        self.timestamp
+    }
+
+    pub fn is_projection_of(self, previous: Money) -> bool {
+        let expected = previous.on_time(self.timestamp);
+        self == expected
+    }
+
     pub fn on_time(self, target_time: Timestamp) -> Money {
 
         if target_time <= self.timestamp {

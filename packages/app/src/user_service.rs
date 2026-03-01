@@ -2,6 +2,8 @@ use anyhow::Result;
 use chrono::NaiveDate;
 use blockchain::Blockchain;
 use crate::block_entry::{AppBlock, BlockEntry};
+use crate::money::Money;
+use crate::timestamp::Timestamp;
 use db::DbEntity;
 use std::path::Path;
 use tokio::sync::oneshot;
@@ -64,6 +66,8 @@ struct Internal{
 
 
 impl Internal {
+    const CURRENT_AMOUNT_MAX_AGE_SECS: u64 = 24 * 60 * 60;
+
     /// Opens the user service with a message receiver (used for per-user workers)
     pub async fn open(
         base_path: impl AsRef<Path>,
@@ -131,13 +135,17 @@ impl Internal {
         let private_chain = Blockchain::<BlockEntry>::from_db(&mut private_chain_db).await?;
         let public_chain = Blockchain::<BlockEntry>::from_db(&mut public_chain_db).await?;
 
-        Ok(Self {
+        let mut ret = Self {
             private_chain_db,
             public_chain_db,
             key_db,
             private_chain,
             public_chain,
-        })
+        };
+
+        ret.ensure_recent_current_amount_snapshot().await?;
+
+        Ok(ret)
     }
 
 
@@ -167,6 +175,37 @@ impl Internal {
 
     async fn add_key_pair(&self, id: &uuid::Uuid) -> Result<crypto::KeyMeta> {
         crypto::KeyMeta::create_ed25519(id, self.key_db.connection()).await
+    }
+
+    fn last_current_amount(&self) -> Option<Money> {
+        self.private_chain.last_entry_map(|entry| match entry {
+            BlockEntry::CurrentAmount { money } => Some(*money),
+            _ => None,
+        })
+    }
+
+    async fn ensure_recent_current_amount_snapshot(&mut self) -> Result<()> {
+        let now = Timestamp::now();
+
+        let next_money = match self.last_current_amount() {
+            Some(last_money) => {
+                let age = now - last_money.timestamp();
+                if age <= Self::CURRENT_AMOUNT_MAX_AGE_SECS {
+                    return Ok(());
+                }
+                last_money.on_time(now)
+            }
+            None => Money::default(),
+        };
+
+        self.private_chain
+            .append_entries_with_db(
+                vec![BlockEntry::CurrentAmount { money: next_money }],
+                &self.private_chain_db,
+            )
+            .await?;
+
+        Ok(())
     }
 }
 

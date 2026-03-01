@@ -45,6 +45,8 @@ pub mod user_init;
 pub mod user_service;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub mod block_entry;
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+pub mod blockchain_validation;
 
 pub use components::*;
 
@@ -60,3 +62,5 @@ pub use user_service::Service;
 pub use user_db::UserDatabase;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub use block_entry::{AppBlock, BlockEntry};
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+pub use blockchain_validation::{verify_money_with_state, MoneyValidationState};

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use blockchain::{Block, BlockHeaderView, BlockLink, BlockLinkView};
 use crypto::{Salt, Signature};
+use crate::money::Money;
 use dioxus::prelude::*;
 
 pub type AppBlock = Block<BlockEntry>;
@@ -17,7 +18,7 @@ pub enum BlockEntry {
     },
     Link(BlockLink),
     CurrentAmount{
-        money: money::Money,
+        money: Money,
     }
 }
 
@@ -89,6 +90,15 @@ pub fn BlockEntryView(entry: BlockEntry) -> Element {
                 div { class: "block-entry block-entry--link",
                     div { class: "block-entry__title", "Link" }
                     BlockLinkView { link }
+                }
+            }
+        }
+        BlockEntry::CurrentAmount { money } => {
+            let timestamp = money.timestamp();
+            rsx! {
+                div { class: "block-entry block-entry--current-amount",
+                    div { class: "block-entry__title", "CurrentAmount" }
+                    div { class: "block-entry__row", "Timestamp: {timestamp}" }
                 }
             }
         }
