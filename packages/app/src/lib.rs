@@ -38,6 +38,10 @@ pub mod key_value;
 pub mod user;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub mod user_db;
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+pub mod user_connection;
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+pub mod bank_account;
 
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub mod user_init;
@@ -49,6 +53,11 @@ pub mod block_entry;
 pub mod blockchain_validation;
 
 pub use components::*;
+pub use money::Money;
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+pub use money::MoneyView;
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+pub use timestamp::{TimestampU64View, TimestampView};
 
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub use error::{Result, UserError};
@@ -56,6 +65,12 @@ pub use error::{Result, UserError};
 pub use key_value::{KeyValue, Value};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub use user::{User, UserId};
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+pub use user_connection::{Transport as UserConnectionTransport, UserConnection, WebRtcIds};
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+pub use user_connection::{WebRtcIdsInputView, WebRtcIdsShareView};
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+pub use bank_account::{BankAccount, BankAccountId, BankAccountView};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub use user_service::Service;
 #[cfg(any(feature = "desktop", feature = "mobile"))]

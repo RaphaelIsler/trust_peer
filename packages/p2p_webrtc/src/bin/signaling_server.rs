@@ -12,12 +12,12 @@
 use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
 use log::{debug, error, info};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, RwLock};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
+use p2p_webrtc::{PeerId, RoomId};
 use p2p_webrtc::signaling::SignalingMessage;
 
 
@@ -59,8 +59,8 @@ async fn handle_client(stream: TcpStream, rooms: RoomMap) {
             let (ws_sender, ws_receiver) = ws_stream.split();
             let (tx, rx) = mpsc::unbounded_channel();
 
-            let mut room_id = String::new();
-            let mut peer_id = String::new();
+            let mut room_id = None::<RoomId>;
+            let mut peer_id = None::<PeerId>;
 
             // Spawn send task
             let _send_task_handle = {
@@ -88,15 +88,18 @@ async fn handle_client(stream: TcpStream, rooms: RoomMap) {
                                     room_id: rid,
                                     peer_id: pid,
                                 } => {
-                                    room_id = rid.clone();
-                                    peer_id = pid.clone();
+                                    room_id = Some(*rid);
+                                    peer_id = Some(*pid);
+
+                                    let room_id = *rid;
+                                    let peer_id = *pid;
 
                                     info!("Peer {} joined room {}", peer_id, room_id);
 
                                     // Get or create room
                                     let mut rooms_guard = rooms.write().await;
                                     let peers = rooms_guard
-                                        .entry(room_id.clone())
+                                        .entry(room_id.to_string())
                                         .or_insert_with(|| Arc::new(RwLock::new(HashMap::new())))
                                         .clone();
                                     drop(rooms_guard);
@@ -105,12 +108,18 @@ async fn handle_client(stream: TcpStream, rooms: RoomMap) {
                                     {
                                         let peers_guard = peers.read().await;
                                         for (other_id, other_tx) in peers_guard.iter() {
-                                            if other_id != &peer_id {
+                                            if other_id != &peer_id.to_string() {
                                                 info!("Notifying peer {} of new peer {}", other_id, peer_id);
-                                                let _ = other_tx.send(SignalingMessage::PeerJoined {
-                                                    peer_id: peer_id.clone(),
-                                                    do_initiation: true,
-                                                });
+                                                if let Ok(other_peer_id) = PeerId::parse_str(other_id) {
+                                                    let _ = other_tx.send(SignalingMessage::PeerJoined {
+                                                        peer_id,
+                                                        do_initiation: true,
+                                                    });
+                                                    let _ = tx.send(SignalingMessage::PeerJoined {
+                                                        peer_id: other_peer_id,
+                                                        do_initiation: false,
+                                                    });
+                                                }
                                             }
                                         }
                                     }
@@ -118,29 +127,26 @@ async fn handle_client(stream: TcpStream, rooms: RoomMap) {
                                     // Add this peer and notify of existing peers
                                     {
                                         let mut peers_guard = peers.write().await;
-                                        peers_guard.insert(peer_id.clone(), tx.clone());
-
-                                        for other_id in peers_guard.keys() {
-                                            if other_id != &peer_id {
-                                                let _ = tx.send(SignalingMessage::PeerJoined {
-                                                    peer_id: other_id.clone(),
-                                                    do_initiation: false
-                                                });
-                                            }
-                                        }
+                                        peers_guard.insert(peer_id.to_string(), tx.clone());
                                     }
                                 }
                                 SignalingMessage::Offer { to, .. } => {
                                     info!("Forwarding offer to {}", to);
-                                    forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                    if let Some(room_id) = room_id {
+                                        forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                    }
                                 }
                                 SignalingMessage::Answer { to, .. } => {
                                     info!("Forwarding answer to {}", to);
-                                    forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                    if let Some(room_id) = room_id {
+                                        forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                    }
                                 }
                                 SignalingMessage::IceCandidate { to, .. } => {
                                     debug!("Forwarding ICE candidate to {}", to);
-                                    forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                    if let Some(room_id) = room_id {
+                                        forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                    }
                                 }
                                 _ => {}
                             }
@@ -159,12 +165,12 @@ async fn handle_client(stream: TcpStream, rooms: RoomMap) {
             }
 
             // Clean up when peer disconnects
-            if !room_id.is_empty() && !peer_id.is_empty() {
+            if let (Some(room_id), Some(peer_id)) = (room_id, peer_id) {
                 info!("Peer {} left room {}", peer_id, room_id);
 
-                if let Some(peers) = rooms.read().await.get(&room_id) {
+                if let Some(peers) = rooms.read().await.get(&room_id.to_string()) {
                     let mut peers_guard = peers.write().await;
-                    peers_guard.remove(&peer_id);
+                    peers_guard.remove(&peer_id.to_string());
 
                     for (_, other_tx) in peers_guard.iter() {
                         let _ = other_tx.send(SignalingMessage::PeerLeft {
@@ -182,12 +188,12 @@ async fn handle_client(stream: TcpStream, rooms: RoomMap) {
 
 async fn forward_message(
     rooms: &RoomMap,
-    room_id: &str,
-    to_peer: &str,
+    room_id: &RoomId,
+    to_peer: &PeerId,
     msg: SignalingMessage,
 ) {
-    if let Some(peers) = rooms.read().await.get(room_id) {
-        if let Some(tx) = peers.read().await.get(to_peer) {
+    if let Some(peers) = rooms.read().await.get(&room_id.to_string()) {
+        if let Some(tx) = peers.read().await.get(&to_peer.to_string()) {
             let _ = tx.send(msg);
         }
     }

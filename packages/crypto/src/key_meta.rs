@@ -20,7 +20,7 @@ pub struct KeyMeta {
 
 impl KeyMeta {
     #[cfg(feature = "ed25519")]
-    pub async fn create_ed25519(id: &Uuid, conn: &SqlitePool) -> Result<Self> {
+    pub async fn create_ed25519<T>(id: &helper::UId<T>, conn: &SqlitePool) -> Result<Self> {
         let mut secret_bytes = [0u8; SECRET_KEY_LENGTH];
         OsRng.fill_bytes(&mut secret_bytes);
         let signing_key = SigningKey::from_bytes(&secret_bytes);
@@ -28,14 +28,14 @@ impl KeyMeta {
         let public_key = PublicKey::from_bytes(&signing_key.verifying_key().to_bytes());
         let private_key = PrivateKey::from_bytes(&signing_key.to_bytes());
 
-        let id_clone = id.clone();
+        let key_id = id.inner().clone();
         let public_key_clone = public_key.clone();
         let private_key_clone = private_key.clone();
 
         sqlx::query(
             "INSERT INTO keys (id, alg, public_key, private_key) VALUES (?1, ?2, ?3, ?4)",
         )
-        .bind(id_clone)
+        .bind(key_id.to_string())
         .bind("ed25519")
         .bind(public_key_clone)
         .bind(private_key_clone)
@@ -43,7 +43,7 @@ impl KeyMeta {
         .await?;
 
         Ok(KeyMeta {
-            id: id.clone(),
+            id: key_id,
             alg: "ed25519".to_string(),
             public_key,
             private_key,
@@ -109,7 +109,7 @@ impl db::DbEntity for KeyMeta {
         sqlx::query(
             "INSERT OR REPLACE INTO keys (id, alg, public_key, private_key) VALUES (?1, ?2, ?3, ?4)",
         )
-        .bind(id)
+        .bind(id.to_string())
         .bind(alg)
         .bind(public_key)
         .bind(private_key)
@@ -122,7 +122,7 @@ impl db::DbEntity for KeyMeta {
         let id = id.clone();
 
         let row = sqlx::query("SELECT alg, public_key, private_key FROM keys WHERE id = ?1")
-            .bind(&id)
+            .bind(id.to_string())
             .fetch_optional(conn)
             .await?;
 
@@ -141,7 +141,7 @@ impl db::DbEntity for KeyMeta {
     async fn delete(conn: &SqlitePool, id: &Self::Id) -> Result<()> {
         let id = id.clone();
         sqlx::query("DELETE FROM keys WHERE id = ?1")
-            .bind(id)
+            .bind(id.to_string())
             .execute(conn)
             .await?;
         Ok(())
@@ -154,8 +154,9 @@ impl db::DbEntity for KeyMeta {
 
         let mut keys = Vec::with_capacity(rows.len());
         for row in rows {
+            let id: String = row.try_get(0)?;
             keys.push(KeyMeta {
-                id: row.try_get(0)?,
+                id: Uuid::parse_str(&id)?,
                 alg: row.try_get(1)?,
                 public_key: row.try_get(2)?,
                 private_key: row.try_get(3)?,

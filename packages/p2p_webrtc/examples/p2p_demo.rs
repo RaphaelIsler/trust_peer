@@ -12,9 +12,10 @@
 //! Example:
 //!   cargo run --example p2p_demo -- ws://localhost:3000 test-room
 
-use p2p_webrtc::{P2pConfig, P2pWebRtc, init_logger};
+use p2p_webrtc::{init_logger, P2pConfig, P2pWebRtc, RoomId};
 use std::time::Duration;
 use tokio::time::sleep;
+use uuid::Uuid;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -25,7 +26,18 @@ async fn main() -> anyhow::Result<()> {
         .get(1)
         .cloned()
         .unwrap_or_else(|| "ws://localhost:3000".to_string());
-    let room_id = args.get(2).cloned().unwrap_or_else(|| "test-room".to_string());
+    let room_id_input = args
+        .get(2)
+        .cloned()
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
+
+    let room_id = match RoomId::parse_str(&room_id_input) {
+        Ok(id) => id,
+        Err(_) => {
+            eprintln!("Invalid room_id '{}'. Expected UUID.", room_id_input);
+            return Ok(());
+        }
+    };
 
     println!("Starting P2P connection example");
     println!("  Signaling server: {}", signaling_server);
@@ -70,8 +82,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Err(e) => {
             eprintln!("✗ Connection failed: {}", e);
-            eprintln!("Make sure the signaling server is running at: {}",
-                p2p.config.signaling_server);
+            eprintln!("Make sure the signaling server is running at: {}", signaling_server);
         }
     }
 

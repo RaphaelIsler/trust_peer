@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 #[cfg(feature = "ed25519")]
 use chacha20poly1305::aead::{Aead, KeyInit};
@@ -38,7 +38,7 @@ pub fn seal(public_key_bytes: &[u8], plaintext: &[u8]) -> Result<Vec<u8>> {
     let cipher = ChaCha20Poly1305::new(Key::from_slice(&key));
     let ciphertext = cipher
         .encrypt(Nonce::from_slice(&nonce_bytes), plaintext)
-        .context("failed to encrypt payload")?;
+        .map_err(|_| anyhow::anyhow!("failed to encrypt payload"))?;
 
     let mut out = Vec::with_capacity(HEADER_LEN + ciphertext.len());
     out.push(SEALED_BOX_VERSION);
@@ -74,7 +74,7 @@ pub fn open(private_key_bytes: &[u8], sealed: &[u8]) -> Result<Vec<u8>> {
     let cipher = ChaCha20Poly1305::new(Key::from_slice(&key));
     let plaintext = cipher
         .decrypt(Nonce::from_slice(nonce_bytes), ciphertext)
-        .context("failed to decrypt payload")?;
+        .map_err(|_| anyhow::anyhow!("failed to decrypt payload"))?;
 
     Ok(plaintext)
 }

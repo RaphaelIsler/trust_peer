@@ -2,9 +2,10 @@ use dioxus::prelude::*;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use log::{error, info};
+use uuid::Uuid;
 
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-use p2p_webrtc::{P2pConfig, P2pWebRtc};
+use p2p_webrtc::{P2pConfig, P2pWebRtc, PeerId, RoomId};
 
 /// Connection status
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -38,7 +39,7 @@ pub fn P2PTestComponent() -> Element {
         let mut messages = use_signal(|| Vec::<String>::new());
         let mut connection_status = use_signal(|| ConnectionStatus::Idle);
         let mut error_message = use_signal(|| Option::<String>::None);
-        let mut peer_id = use_signal(|| String::from("anonymous"));
+        let mut peer_id = use_signal(|| Uuid::new_v4().to_string());
         let mut signaling_server = use_signal(|| String::from("ws://127.0.0.1:3000"));
 
         // Shared P2P instance
@@ -54,6 +55,28 @@ pub fn P2PTestComponent() -> Element {
                     return;
                 }
 
+                let room_id = match RoomId::parse_str(&room) {
+                    Ok(value) => value,
+                    Err(_) => {
+                        error_message.set(Some("Room ID must be a valid UUID".to_string()));
+                        return;
+                    }
+                };
+
+                let peer_id = if peer_id().trim().is_empty() {
+                    PeerId::from_uuid(Uuid::new_v4())
+                } else {
+                    match PeerId::parse_str(peer_id().trim()) {
+                        Ok(value) => value,
+                        Err(_) => {
+                            error_message.set(Some("Peer ID must be a valid UUID".to_string()));
+                            return;
+                        }
+                    }
+                };
+
+                let peer_id_text = peer_id.to_string();
+
                 connection_status.set(ConnectionStatus::Connecting);
                 error_message.set(None);
 
@@ -62,10 +85,10 @@ pub fn P2PTestComponent() -> Element {
                 // Create config
                 let config = P2pConfig::new(
                     signaling_server().clone(),
-                    room.clone(),
+                    room_id,
                 )
                 .with_timeout(30)
-                .with_peer_id(peer_id().clone());
+                .with_peer_id(peer_id);
 
                 // Create P2P handler
                 let mut p2p = P2pWebRtc::new(config);
@@ -78,7 +101,7 @@ pub fn P2PTestComponent() -> Element {
                         messages.write().push(format!(
                             "✓ Connected to room: {} (Peer: {})",
                             room,
-                            peer_id()
+                            peer_id_text
                         ));
 
                         // Store P2P instance
@@ -217,7 +240,7 @@ pub fn P2PTestComponent() -> Element {
                             oninput: move |e| peer_id.set(e.value()),
                             disabled: connection_status() != ConnectionStatus::Idle,
                             style: "width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9em; box-sizing: border-box;",
-                            placeholder: "anonymous",
+                            placeholder: "e.g. 550e8400-e29b-41d4-a716-446655440000",
                         }
                     }
 
@@ -232,7 +255,7 @@ pub fn P2PTestComponent() -> Element {
                             oninput: move |e| room_id.set(e.value()),
                             disabled: connection_status() != ConnectionStatus::Idle,
                             style: "width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9em; box-sizing: border-box;",
-                            placeholder: "e.g. test-room-1",
+                            placeholder: "e.g. 550e8400-e29b-41d4-a716-446655440000",
                         }
                     }
                 }

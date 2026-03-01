@@ -14,10 +14,11 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }
 db = { path = "../db" }
+helper = { workspace = true, features = ["uuid", "sqlx"] }
 
 # ed25519 is an optional feature (enabled by default)
 ed25519-dalek = { workspace = true, optional = true }
-x25519-dalek = { workspace = true, optional = true }
+x25519-dalek = { workspace = true, optional = true, features = ["static_secrets"] }
 curve25519-dalek = { workspace = true, optional = true }
 hkdf = { workspace = true, optional = true }
 chacha20poly1305 = { workspace = true, optional = true }

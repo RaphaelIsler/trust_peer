@@ -18,6 +18,7 @@ futures-util = { workspace = true }
 parking_lot = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
+helper = { workspace = true, features = ["uuid"] }
 
 [dev-dependencies]
 tokio-test = { workspace = true }

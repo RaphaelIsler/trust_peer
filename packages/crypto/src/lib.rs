@@ -1,7 +1,5 @@
 //! Simple crypto utilities: checksums, key generation, storage and signing.
 
-use anyhow::Result;
-
 mod hash;
 pub use hash::Hash;
 

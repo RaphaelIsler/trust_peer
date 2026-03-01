@@ -4,6 +4,7 @@
 //! Manages room-based signaling for SDP and ICE candidate exchange.
 
 use crate::error::{Error, Result};
+use crate::api::{PeerId, RoomId};
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use log::{debug, error, info, warn};
@@ -28,28 +29,28 @@ pub enum SignalingMessage {
     /// Join a room
     #[serde(rename = "join")]
     Join {
-        room_id: String,
-        peer_id: String,
+        room_id: RoomId,
+        peer_id: PeerId,
     },
     /// SDP offer
     #[serde(rename = "offer")]
     Offer {
-        from: String,
-        to: String,
+        from: PeerId,
+        to: PeerId,
         sdp: String,
     },
     /// SDP answer
     #[serde(rename = "answer")]
     Answer {
-        from: String,
-        to: String,
+        from: PeerId,
+        to: PeerId,
         sdp: String,
     },
     /// ICE candidate
     #[serde(rename = "ice")]
     IceCandidate {
-        from: String,
-        to: String,
+        from: PeerId,
+        to: PeerId,
         candidate: String,
         sdp_mid: String,
         sdp_mline_index: u32,
@@ -57,13 +58,13 @@ pub enum SignalingMessage {
     /// Notification of peer in room
     #[serde(rename = "peer_joined")]
     PeerJoined {
-        peer_id: String,
+        peer_id: PeerId,
         do_initiation: bool,
     },
     /// Notification of peer leaving room
     #[serde(rename = "peer_left")]
     PeerLeft {
-        peer_id: String,
+        peer_id: PeerId,
     },
     /// Keep-alive ping
     #[serde(rename = "ping")]
@@ -88,9 +89,9 @@ pub struct SignalingClient {
   //  stream_rx: Arc<tokio::sync::Mutex<Option<WsStream2>>>,
 //    tx: mpsc::UnboundedSender<SignalingMessage>,
     ice_config: crate::peer::IceServersConfig,
-    room_id: String,
-    peer_id: String,
-    remote_id: Option<String>,
+    room_id: RoomId,
+    peer_id: PeerId,
+    remote_id: Option<PeerId>,
     peer: Option<crate::peer::PeerConnection>,
     ice_rx: Option<mpsc::UnboundedReceiver<Option<crate::peer::IceCandidate>>>,
     data_channel: Option<DataChannel>,
@@ -99,7 +100,7 @@ pub struct SignalingClient {
 
 impl SignalingClient {
     /// Create a new signaling client (but don't connect yet)
-    pub fn new(room_id: String,  ice_config: crate::peer::IceServersConfig, peer_id: String, tx: mpsc::UnboundedSender<SignalingMessage>) -> Self {
+    pub fn new(room_id: RoomId,  ice_config: crate::peer::IceServersConfig, peer_id: PeerId, _tx: mpsc::UnboundedSender<SignalingMessage>) -> Self {
         Self {
             sink: Arc::new(tokio::sync::Mutex::new(None)),
             //stream_rx: Arc::new(tokio::sync::Mutex::new(None)),
@@ -133,8 +134,8 @@ impl SignalingClient {
 
         // Send join message
         self.send_message(SignalingMessage::Join {
-            room_id: self.room_id.clone(),
-            peer_id: self.peer_id.clone(),
+            room_id: self.room_id,
+            peer_id: self.peer_id,
         })
         .await?;
 
@@ -326,7 +327,7 @@ impl SignalingClient {
         match msg {
             SignalingMessage::PeerJoined { peer_id: remote_id, do_initiation: is_initiator } => {
                 if remote_id != self.peer_id {
-                    self.remote_id = Some(remote_id.clone());
+                    self.remote_id = Some(remote_id);
                     info!("Peer joined: {} is_initiator: {}", remote_id.clone(), is_initiator);
 
                     let (peer, ice_rx) = PeerConnection::new(is_initiator, self.ice_config.clone()).await?;
@@ -340,8 +341,8 @@ impl SignalingClient {
                         self.data_channel = Some(crate::data_channel::DataChannel::get_or_create(
                             self.peer.as_ref().unwrap().inner(),
                             true,
-                            self.peer_id.clone(),
-                            remote_id.clone(),
+                            self.peer_id,
+                            remote_id,
                         ).await?
                         );
                         let offer_sdp = self.peer.as_ref().unwrap().create_offer().await?;
@@ -352,8 +353,8 @@ impl SignalingClient {
 
                         info!("Sending offer from {} to {}", self.peer_id, remote_id);
                         self.send_message(SignalingMessage::Offer {
-                                from: self.peer_id.clone(),
-                                to: remote_id.clone(),
+                            from: self.peer_id,
+                            to: remote_id,
                                 sdp: offer_sdp,
                             })
                             .await
@@ -376,7 +377,7 @@ impl SignalingClient {
                 info!("Offer message received: from={}, to={}, expected_to={}", from, to, self.peer_id);
                 if to == self.peer_id && from != self.peer_id {
                     info!("Received offer from: {}", from);
-                    self.remote_id = Some(from.clone());
+                    self.remote_id = Some(from);
 
                     if self.peer.is_none() {
                         let (peer, ice_rx) = PeerConnection::new(false, self.ice_config.clone()).await?;
@@ -397,8 +398,8 @@ impl SignalingClient {
 
                     info!("Sending answer from {} to {}", self.peer_id, from);
                     self.send_message(SignalingMessage::Answer {
-                            from: self.peer_id.clone(),
-                            to: from.clone(),
+                            from: self.peer_id,
+                            to: from,
                             sdp: answer_sdp,
                         })
                         .await
@@ -415,8 +416,8 @@ impl SignalingClient {
                         let dc = crate::data_channel::DataChannel::get_or_create(
                             p.inner(),
                             false,
-                            self.peer_id.clone(),
-                            from.clone(),
+                            self.peer_id,
+                            from,
                         )
                         .await?;
                         info!("Data channel created for responder");
@@ -443,8 +444,8 @@ impl SignalingClient {
                         let dc = crate::data_channel::DataChannel::get_or_create(
                             p.inner(),
                             true,
-                            self.peer_id.clone(),
-                            from.clone(),
+                            self.peer_id,
+                            from,
                         )
                         .await?;
                         info!("Data channel created for responder");
@@ -488,8 +489,8 @@ impl SignalingClient {
                     self.peer_id, remote_id, candidate.candidate
                 );
                 let msg = SignalingMessage::IceCandidate {
-                    from: self.peer_id.clone(),
-                    to: remote_id.clone(),
+                    from: self.peer_id,
+                    to: *remote_id,
                     candidate: candidate.candidate,
                     sdp_mid: candidate.sdp_mid,
                     sdp_mline_index: candidate.sdp_mline_index,

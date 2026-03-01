@@ -9,7 +9,7 @@ pub mod peer;
 pub mod data_channel;
 pub mod api;
 
-pub use api::{P2pWebRtc, P2pConfig};
+pub use api::{P2pWebRtc, P2pConfig, PeerId, RoomId};
 pub use error::{Error, Result};
 pub use peer::IceCandidate;
 

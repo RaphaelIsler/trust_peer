@@ -8,12 +8,18 @@ use crate::error::{Error, Result};
 use crate::peer::{IceServersConfig, PeerConnection, TurnServer};
 use crate::signaling::{SignalingClient, SignalingMessage};
 use log::info;
-use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use tokio::sync::RwLock;
-use tokio::time::sleep;
 use tokio::sync::mpsc;
 use uuid::Uuid;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoomIdMarker;
+pub type RoomId = helper::UId<RoomIdMarker>;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PeerIdMarker;
+pub type PeerId = helper::UId<PeerIdMarker>;
 
 /// Configuration for P2P connection
 #[derive(Debug, Clone)]
@@ -21,9 +27,9 @@ pub struct P2pConfig {
     /// WebSocket signaling server URL
     pub signaling_server: String,
     /// Room ID for the connection
-    pub room_id: String,
+    pub room_id: RoomId,
     /// Optional peer ID (generated if not provided)
-    pub peer_id: Option<String>,
+    pub peer_id: Option<PeerId>,
     /// ICE servers configuration
     pub ice_config: IceServersConfig,
     /// Connection timeout in seconds
@@ -32,7 +38,7 @@ pub struct P2pConfig {
 
 impl P2pConfig {
     /// Create a new configuration with default values
-    pub fn new(signaling_server: String, room_id: String) -> Self {
+    pub fn new(signaling_server: String, room_id: RoomId) -> Self {
         Self {
             signaling_server,
             room_id,
@@ -64,7 +70,7 @@ impl P2pConfig {
     }
 
     /// Set peer ID
-    pub fn with_peer_id(mut self, peer_id: String) -> Self {
+    pub fn with_peer_id(mut self, peer_id: PeerId) -> Self {
         self.peer_id = Some(peer_id);
         self
     }
@@ -79,7 +85,7 @@ impl P2pConfig {
 /// Main P2P WebRTC connection handler
 pub struct P2pWebRtc {
     config: P2pConfig,
-    peer_id: String,
+    peer_id: PeerId,
     peer: Option<PeerConnection>,
     data_channel: Option<DataChannel>,
     #[allow(dead_code)]
@@ -94,7 +100,7 @@ impl P2pWebRtc {
         let peer_id = config
             .peer_id
             .take()
-            .unwrap_or_else(|| Uuid::new_v4().to_string());
+            .unwrap_or_else(|| PeerId::from_uuid(Uuid::new_v4()));
         // Create the channel for signaling messages
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -191,6 +197,10 @@ impl P2pWebRtc {
         } else {
             Err(Error::NotConnected)
         }
+    }
+
+    pub fn data_channel(&self) -> Option<DataChannel> {
+        self.data_channel.clone()
     }
 
     /// Close the connection

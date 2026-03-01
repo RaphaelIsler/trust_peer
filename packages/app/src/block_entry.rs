@@ -1,7 +1,8 @@
 use anyhow::Result;
 use blockchain::{Block, BlockHeaderView, BlockLink, BlockLinkView};
 use crypto::{Salt, Signature};
-use crate::money::Money;
+use crate::money::{Money, MoneyView, MoneyViewMode};
+use crate::timestamp::TimestampView;
 use dioxus::prelude::*;
 
 pub type AppBlock = Block<BlockEntry>;
@@ -98,7 +99,14 @@ pub fn BlockEntryView(entry: BlockEntry) -> Element {
             rsx! {
                 div { class: "block-entry block-entry--current-amount",
                     div { class: "block-entry__title", "CurrentAmount" }
-                    div { class: "block-entry__row", "Timestamp: {timestamp}" }
+                    div { class: "block-entry__row",
+                        "Timestamp: "
+                        TimestampView { timestamp }
+                    }
+                    div { class: "block-entry__row",
+                        "Amount: "
+                        MoneyView { money, shown_amount: MoneyViewMode::Stored }
+                    }
                 }
             }
         }

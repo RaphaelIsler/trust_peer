@@ -6,7 +6,9 @@
 //! 3. Receive peer joined notifications
 //! 4. Exchange signaling messages
 
-use p2p_webrtc::signaling::SignalingMessage;
+use p2p_webrtc::peer::IceServersConfig;
+use p2p_webrtc::signaling::{ConnectionMsg, SignalingClient, SignalingMessage};
+use p2p_webrtc::{PeerId, RoomId};
 use std::net::TcpListener;
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,6 +16,7 @@ use tokio::net::TcpListener as TokioTcpListener;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
 use futures_util::{SinkExt, StreamExt};
+use uuid::Uuid;
 use serde_json;
 
 type PeerMap = Arc<tokio::sync::RwLock<std::collections::HashMap<String, mpsc::UnboundedSender<SignalingMessage>>>>;
@@ -51,8 +54,8 @@ async fn handle_client(stream: tokio::net::TcpStream, rooms: RoomMap) {
             let (ws_sender, ws_receiver) = ws_stream.split();
             let (tx, rx) = mpsc::unbounded_channel();
 
-            let mut room_id = String::new();
-            let mut peer_id = String::new();
+            let mut room_id = None::<RoomId>;
+            let mut peer_id = None::<PeerId>;
 
             // Spawn send task
             let _send_task_handle = {
@@ -79,15 +82,18 @@ async fn handle_client(stream: tokio::net::TcpStream, rooms: RoomMap) {
                                     room_id: rid,
                                     peer_id: pid,
                                 } => {
-                                    room_id = rid.clone();
-                                    peer_id = pid.clone();
+                                    room_id = Some(*rid);
+                                    peer_id = Some(*pid);
+
+                                    let room_id = *rid;
+                                    let peer_id = *pid;
 
                                     log::info!("Peer {} joined room {}", peer_id, room_id);
 
                                     // Get or create room
                                     let mut rooms_guard = rooms.write().await;
                                     let peers = rooms_guard
-                                        .entry(room_id.clone())
+                                        .entry(room_id.to_string())
                                         .or_insert_with(|| Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())))
                                         .clone();
                                     drop(rooms_guard);
@@ -96,10 +102,11 @@ async fn handle_client(stream: tokio::net::TcpStream, rooms: RoomMap) {
                                     {
                                         let peers_guard = peers.read().await;
                                         for (other_id, other_tx) in peers_guard.iter() {
-                                            if other_id != &peer_id {
+                                            if other_id != &peer_id.to_string() {
                                                 log::info!("Notifying peer {} of new peer {}", other_id, peer_id);
                                                 let _ = other_tx.send(SignalingMessage::PeerJoined {
-                                                    peer_id: peer_id.clone(),
+                                                    peer_id,
+                                                    do_initiation: true,
                                                 });
                                             }
                                         }
@@ -108,28 +115,37 @@ async fn handle_client(stream: tokio::net::TcpStream, rooms: RoomMap) {
                                     // Add this peer and notify of existing peers
                                     {
                                         let mut peers_guard = peers.write().await;
-                                        peers_guard.insert(peer_id.clone(), tx.clone());
+                                        peers_guard.insert(peer_id.to_string(), tx.clone());
 
                                         for other_id in peers_guard.keys() {
-                                            if other_id != &peer_id {
-                                                let _ = tx.send(SignalingMessage::PeerJoined {
-                                                    peer_id: other_id.clone(),
-                                                });
+                                            if other_id != &peer_id.to_string() {
+                                                if let Ok(other_peer_id) = PeerId::parse_str(other_id) {
+                                                    let _ = tx.send(SignalingMessage::PeerJoined {
+                                                        peer_id: other_peer_id,
+                                                        do_initiation: false,
+                                                    });
+                                                }
                                             }
                                         }
                                     }
                                 }
                                 SignalingMessage::Offer { to, .. } => {
                                     log::info!("Forwarding offer to {}", to);
-                                    forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                    if let Some(room_id) = room_id {
+                                        forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                    }
                                 }
                                 SignalingMessage::Answer { to, .. } => {
                                     log::info!("Forwarding answer to {}", to);
-                                    forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                    if let Some(room_id) = room_id {
+                                        forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                    }
                                 }
                                 SignalingMessage::IceCandidate { to, .. } => {
                                     log::debug!("Forwarding ICE candidate to {}", to);
-                                    forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                    if let Some(room_id) = room_id {
+                                        forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                    }
                                 }
                                 _ => {}
                             }
@@ -148,16 +164,16 @@ async fn handle_client(stream: tokio::net::TcpStream, rooms: RoomMap) {
             }
 
             // Clean up when peer disconnects
-            if !room_id.is_empty() && !peer_id.is_empty() {
+            if let (Some(room_id), Some(peer_id)) = (room_id, peer_id) {
                 log::info!("Peer {} left room {}", peer_id, room_id);
 
-                if let Some(peers) = rooms.read().await.get(&room_id) {
+                if let Some(peers) = rooms.read().await.get(&room_id.to_string()) {
                     let mut peers_guard = peers.write().await;
-                    peers_guard.remove(&peer_id);
+                    peers_guard.remove(&peer_id.to_string());
 
                     for (_, other_tx) in peers_guard.iter() {
                         let _ = other_tx.send(SignalingMessage::PeerLeft {
-                            peer_id: peer_id.clone(),
+                            peer_id,
                         });
                     }
                 }
@@ -171,12 +187,12 @@ async fn handle_client(stream: tokio::net::TcpStream, rooms: RoomMap) {
 
 async fn forward_message(
     rooms: &RoomMap,
-    room_id: &str,
-    to_peer: &str,
+    room_id: &RoomId,
+    to_peer: &PeerId,
     msg: SignalingMessage,
 ) {
-    if let Some(peers) = rooms.read().await.get(room_id) {
-        if let Some(tx) = peers.read().await.get(to_peer) {
+    if let Some(peers) = rooms.read().await.get(&room_id.to_string()) {
+        if let Some(tx) = peers.read().await.get(&to_peer.to_string()) {
             let _ = tx.send(msg);
         }
     }
@@ -203,63 +219,77 @@ async fn test_two_clients_connect_and_exchange_messages() {
     // Give server time to start
     sleep(Duration::from_millis(500)).await;
 
-    let room_id = "test-room".to_string();
+    let room_id = RoomId::from_uuid(Uuid::new_v4());
+    let client1_id = PeerId::from_uuid(Uuid::new_v4());
+    let client2_id = PeerId::from_uuid(Uuid::new_v4());
 
     // Create two clients with channels
-    let (tx1, mut rx1) = mpsc::unbounded_channel::<SignalingMessage>();
-    let (tx2, mut rx2) = mpsc::unbounded_channel::<SignalingMessage>();
+    let (tx1, mut rx1) = mpsc::unbounded_channel::<ConnectionMsg>();
+    let (tx2, mut rx2) = mpsc::unbounded_channel::<ConnectionMsg>();
 
     // Track connection status with shared state
     let client1_connected = Arc::new(tokio::sync::RwLock::new(false));
     let client2_connected = Arc::new(tokio::sync::RwLock::new(false));
 
     let client1_handle = {
-        let tx = tx1.clone();
         let ws_addr = ws_addr.clone();
         let room_id = room_id.clone();
+        let peer_id = client1_id;
+        let connection_tx = tx1.clone();
         let connected = client1_connected.clone();
         tokio::spawn(async move {
-            let mut client = p2p_webrtc::signaling::SignalingClient::new(
+            let mut client = SignalingClient::new(
                 room_id,
-                "client1".to_string(),
-                tx,
+                IceServersConfig::default(),
+                peer_id,
+                mpsc::unbounded_channel::<SignalingMessage>().0,
             );
 
-            if let Err(e) = client.connect(&ws_addr).await {
-                eprintln!("Client 1 connection error: {}", e);
-                return;
-            }
+            let stream = match client.connect(&ws_addr).await {
+                Ok(stream) => stream,
+                Err(e) => {
+                    eprintln!("Client 1 connection error: {}", e);
+                    return;
+                }
+            };
 
             // Mark as connected
             *connected.write().await = true;
             println!("✓ Client 1 successfully connected via client.connect()");
 
-            let _ = client.receive_loop().await;
+            let _ = SignalingClient::receive_loop(stream, connection_tx).await;
+
         })
     };
 
     let client2_handle = {
-        let tx = tx2.clone();
         let ws_addr = ws_addr.clone();
         let room_id = room_id.clone();
+        let peer_id = client2_id;
+        let connection_tx = tx2.clone();
         let connected = client2_connected.clone();
         tokio::spawn(async move {
-            let mut client = p2p_webrtc::signaling::SignalingClient::new(
+            let mut client = SignalingClient::new(
                 room_id,
-                "client2".to_string(),
-                tx,
+                IceServersConfig::default(),
+                peer_id,
+                mpsc::unbounded_channel::<SignalingMessage>().0,
             );
 
-            if let Err(e) = client.connect(&ws_addr).await {
-                eprintln!("Client 2 connection error: {}", e);
-                return;
-            }
+            let stream = match client.connect(&ws_addr).await {
+                Ok(stream) => stream,
+                Err(e) => {
+                    eprintln!("Client 2 connection error: {}", e);
+                    return;
+                }
+            };
 
             // Mark as connected
             *connected.write().await = true;
             println!("✓ Client 2 successfully connected via client.connect()");
 
-            let _ = client.receive_loop().await;
+            let _ = SignalingClient::receive_loop(stream, connection_tx).await;
+
         })
     };
 
@@ -300,16 +330,16 @@ async fn test_two_clients_connect_and_exchange_messages() {
     while start.elapsed() < timeout {
         tokio::select! {
             Some(msg) = rx1.recv() => {
-                if let SignalingMessage::PeerJoined { peer_id } = &msg {
-                    if peer_id == "client2" {
+                if let ConnectionMsg::MsgFromSignal(SignalingMessage::PeerJoined { peer_id, .. }) = &msg {
+                    if *peer_id == client2_id {
                         println!("✓ Client 1 received PeerJoined from client2");
                         client1_got_peer_joined = true;
                     }
                 }
             }
             Some(msg) = rx2.recv() => {
-                if let SignalingMessage::PeerJoined { peer_id } = &msg {
-                    if peer_id == "client1" {
+                if let ConnectionMsg::MsgFromSignal(SignalingMessage::PeerJoined { peer_id, .. }) = &msg {
+                    if *peer_id == client1_id {
                         println!("✓ Client 2 received PeerJoined from client1");
                         client2_got_peer_joined = true;
                     }
@@ -354,69 +384,88 @@ async fn test_client_can_send_offer_and_answer() {
     // Give server time to start
     sleep(Duration::from_millis(500)).await;
 
-    let room_id = "offer-test-room".to_string();
+    let room_id = RoomId::from_uuid(Uuid::new_v4());
+    let offerer_id = PeerId::from_uuid(Uuid::new_v4());
+    let answerer_id = PeerId::from_uuid(Uuid::new_v4());
 
-    let (tx1, mut rx1) = mpsc::unbounded_channel::<SignalingMessage>();
-    let (tx2, mut rx2) = mpsc::unbounded_channel::<SignalingMessage>();
+    let (tx1, mut rx1) = mpsc::unbounded_channel::<ConnectionMsg>();
+    let (tx2, mut rx2) = mpsc::unbounded_channel::<ConnectionMsg>();
 
     let client1_handle = {
-        let tx = tx1.clone();
         let ws_addr = ws_addr.clone();
         let room_id = room_id.clone();
+        let peer_id = offerer_id;
+        let answerer_id = answerer_id;
+        let connection_tx = tx1.clone();
         tokio::spawn(async move {
-            let mut client = p2p_webrtc::signaling::SignalingClient::new(
+            let mut client = SignalingClient::new(
                 room_id,
-                "offerer".to_string(),
-                tx,
+                IceServersConfig::default(),
+                peer_id,
+                mpsc::unbounded_channel::<SignalingMessage>().0,
             );
 
-            if let Err(e) = client.connect(&ws_addr).await {
-                eprintln!("Offerer connection error: {}", e);
+            let stream = match client.connect(&ws_addr).await {
+                Ok(stream) => stream,
+                Err(e) => {
+                    eprintln!("Offerer connection error: {}", e);
+                    return;
+                }
+            };
+
+            let receive_task = tokio::spawn(async move {
+                let _ = SignalingClient::receive_loop(stream, connection_tx).await;
+            });
+
+            if let Err(e) = client.send_message(SignalingMessage::Offer {
+                from: peer_id,
+                to: answerer_id,
+                sdp: "test-sdp-offer".to_string(),
+            }).await {
+                eprintln!("Error sending offer: {}", e);
                 return;
             }
 
             // Wait a bit for both to be connected
             sleep(Duration::from_millis(500)).await;
 
-            // Send offer
-            let offer = SignalingMessage::Offer {
-                from: "offerer".to_string(),
-                to: "answerer".to_string(),
-                sdp: "test-sdp-offer".to_string(),
-            };
-
-            if let Err(e) = client.send_message(offer).await {
-                eprintln!("Error sending offer: {}", e);
-                return;
-            }
-
-            let _ = client.receive_loop().await;
+            let _ = receive_task.await;
         })
     };
 
     let client2_handle = {
-        let tx = tx2.clone();
         let ws_addr = ws_addr.clone();
         let room_id = room_id.clone();
+        let peer_id = answerer_id;
+        let offerer_id = offerer_id;
+        let connection_tx = tx2.clone();
         tokio::spawn(async move {
-            let mut client = p2p_webrtc::signaling::SignalingClient::new(
+            let mut client = SignalingClient::new(
                 room_id,
-                "answerer".to_string(),
-                tx,
+                IceServersConfig::default(),
+                peer_id,
+                mpsc::unbounded_channel::<SignalingMessage>().0,
             );
 
-            if let Err(e) = client.connect(&ws_addr).await {
-                eprintln!("Answerer connection error: {}", e);
-                return;
-            }
+            let stream = match client.connect(&ws_addr).await {
+                Ok(stream) => stream,
+                Err(e) => {
+                    eprintln!("Answerer connection error: {}", e);
+                    return;
+                }
+            };
+
+            let receive_task = tokio::spawn(async move {
+                let _ = SignalingClient::receive_loop(stream, connection_tx).await;
+            });
 
             // Wait for offer
             sleep(Duration::from_millis(300)).await;
 
             // Send answer
             let answer = SignalingMessage::Answer {
-                from: "answerer".to_string(),
-                to: "offerer".to_string(),
+                from: peer_id,
+                to: offerer_id,
                 sdp: "test-sdp-answer".to_string(),
             };
 
@@ -425,7 +474,7 @@ async fn test_client_can_send_offer_and_answer() {
                 return;
             }
 
-            let _ = client.receive_loop().await;
+            let _ = receive_task.await;
         })
     };
 
@@ -437,11 +486,11 @@ async fn test_client_can_send_offer_and_answer() {
     while start.elapsed() < timeout {
         tokio::select! {
             Some(msg) = rx1.recv() => {
-                println!("Client 1 received: {:?}", msg);
+                println!("Client 1 received signaling event");
                 received_any_message = true;
             }
             Some(msg) = rx2.recv() => {
-                println!("Client 2 received: {:?}", msg);
+                println!("Client 2 received signaling event");
                 received_any_message = true;
             }
             _ = sleep(Duration::from_millis(100)) => {

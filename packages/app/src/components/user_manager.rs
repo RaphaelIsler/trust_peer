@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-use crate::{Service, User, UserDatabase};
+use crate::{Service, User, UserDatabase, WebRtcIds, WebRtcIdsInputView, WebRtcIdsShareView};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 use chrono::NaiveDate;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
@@ -243,6 +243,9 @@ fn UserCard(user: User, service: Service) -> Element {
     let active_chain = use_signal(|| None::<Vec<AppBlock>>);
     let mut chain_error = use_signal(|| None::<String>);
     let chain_loading = use_signal(|| false);
+    let mut new_connection_ids = use_signal(|| None::<WebRtcIds>);
+    let mut new_connection_error = use_signal(|| None::<String>);
+    let mut imported_connection_message = use_signal(|| None::<String>);
 
     if private_id().is_none() {
         let service = service.clone();
@@ -365,6 +368,104 @@ fn UserCard(user: User, service: Service) -> Element {
                             style: "padding: 6px 12px; background: #6610f2; color: white; border: none; border-radius: 4px; cursor: pointer;",
                             "Public Chain"
                         }
+                        button {
+                            onclick: {
+                                let service = service.clone();
+                                move |_| {
+                                    let service = service.clone();
+                                    spawn(async move {
+                                        let (ids_tx, ids_rx) = tokio::sync::oneshot::channel();
+
+                                        let service_done = service.clone();
+                                        let mut new_connection_error_done = new_connection_error;
+                                        let mut imported_connection_message_done = imported_connection_message;
+
+                                        spawn(async move {
+                                            match service_done.start_new_connection(ids_tx).await {
+                                                Ok(()) => {
+                                                    new_connection_error_done.set(None);
+                                                    imported_connection_message_done
+                                                        .set(Some("Verbindung aufgebaut".to_string()));
+                                                }
+                                                Err(error) => {
+                                                    imported_connection_message_done.set(None);
+                                                    new_connection_error_done
+                                                        .set(
+                                                            Some(format!("Verbindungsaufbau fehlgeschlagen: {error}")),
+                                                        );
+                                                }
+                                            }
+                                        });
+                                        match ids_rx.await {
+                                            Ok(Ok(ids)) => {
+                                                new_connection_error
+                                                    .set(Some(format!("Failed to create connection: {error}")));
+                                                }
+                                                imported_connection_message
+                                                    .set(Some("Verbindungsaufbau gestartet".to_string()));
+                                                new_connection_ids.set(Some(ids));
+                                            }
+                                            Ok(Err(error)) => {
+                                                imported_connection_message.set(None);
+                                                new_connection_ids.set(None);
+                                                new_connection_error
+                                                    .set(Some(format!("Failed to create connection: {error}")));
+                                            }
+                                            Err(_) => {
+                                                imported_connection_message.set(None);
+                                                new_connection_ids.set(None);
+                                                new_connection_error
+                                                    .set(Some("Failed to create connection".to_string()));
+                                            }
+                                        }
+                                    });
+                                }
+                            },
+                            style: "padding: 6px 12px; background: #198754; color: white; border: none; border-radius: 4px; cursor: pointer;",
+                            "Neue Verbindung"
+                        }
+                    }
+
+                    if let Some(error) = new_connection_error() {
+                        div { style: "margin: 10px 0; color: #b00020;", "{error}" }
+                    }
+
+                    if let Some(ids) = new_connection_ids() {
+                        div { style: "margin: 12px 0;",
+                            WebRtcIdsShareView { ids }
+                        }
+                    }
+
+                    div { style: "margin: 12px 0;",
+                        WebRtcIdsInputView {
+                            on_submit: {
+                                let service = service.clone();
+                                move |ids: WebRtcIds| {
+                                    let service = service.clone();
+                                    spawn(async move {
+                                        match service.create_new_connection_from_web_rtc_ids(ids.clone()).await {
+                                            Ok(()) => {
+                                                new_connection_error.set(None);
+                                                imported_connection_message
+                                                    .set(Some("Verbindung gespeichert".to_string()));
+                                                new_connection_ids.set(Some(ids));
+                                            }
+                                            Err(error) => {
+                                                imported_connection_message.set(None);
+                                                new_connection_error
+                                                    .set(
+                                                        Some(format!("Failed to save imported connection: {error}")),
+                                                    );
+                                            }
+                                        }
+                                    });
+                                }
+                            },
+                        }
+                    }
+
+                    if let Some(message) = imported_connection_message() {
+                        div { style: "margin: 8px 0; color: #146c43;", "{message}" }
                     }
 
                     {chain_error_view}

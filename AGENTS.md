@@ -8,13 +8,19 @@ Stack: Rust, Dioxus, Sqlite, WebRTC
 ## Architecture
 - Clean architecture
 - Services contain business logic
+- `#[derive(helper::ServiceWrapper)]` on a message enum generates async wrapper methods on the service type in snake_case (for example `StartNewConnection` -> `start_new_connection`).
+- Each instance has a private chain and a dedicated public chain.
+- Public chain is intended to be published externally as integrity proof for the private chain.
+- Private chain is shared only with connected peers for transaction oversight and trust decisions.
 
 ## Code Style
  - Write code and comments in english
  - for UP components, read DIOXUS_AGENTS.md
  - Avoid using Rr and Arc if possible. Use direct instance instead.
+ - Prefer module namespaces (`mod::Type`) to keep type names short and clear in context (e.g. use `user_connection::Id` instead of globally prefixed names).
  - Use helper::Guid for GUID-Ids. (Found in helper = { git = "https://bitbucket.org/revwork/rust_helper.git", package = "rust_helper", features=["uuid", "sqlite"]  crates)
  - Keep low-complexity types in a single file (type, logic, DB access, UI). When a file grows or responsibilities expand, split into a module folder with submodules.
+ - For `helper::ServiceWrapper`, keep one `oneshot::Sender<...>` field in each message variant (usually named `tx`) so wrapper generation and call sites stay predictable.
 
 ## Collaboration Mode
 - For complex tasks: explain plan first

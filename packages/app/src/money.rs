@@ -1,6 +1,10 @@
 use serde::{Serialize, Deserialize};
 use super::timestamp::Timestamp;
 use crate::q32_32::Q32_32;
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+use dioxus::prelude::*;
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+use tokio::time::{sleep, Duration};
 
 
 ///80% after 3 months
@@ -105,6 +109,60 @@ impl core::ops::Add for Money {
                 decay_rate: self.decay_rate,
                 income_rate: self.income_rate + rhs.income_rate,
             }
+        }
+    }
+}
+
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum MoneyViewMode {
+    Current,
+    Stored,
+}
+
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+#[component]
+pub fn MoneyView(money: Money, shown_amount: MoneyViewMode) -> Element {
+    let mut mode = use_signal(move || shown_amount);
+    let mut current_amount = use_signal(move || money.on_time(Timestamp::now()).amount);
+
+    use_effect(move || {
+        mode.set(shown_amount);
+    });
+
+    use_future(move || async move {
+        loop {
+            sleep(Duration::from_secs(9)).await;
+
+            if mode() == MoneyViewMode::Current {
+                current_amount.set(money.on_time(Timestamp::now()).amount);
+            }
+        }
+    });
+
+    let shown_amount = match mode() {
+        MoneyViewMode::Current => current_amount().to_u64_floor().to_string(),
+        MoneyViewMode::Stored => money.amount.to_string(),
+    };
+
+    rsx! {
+        span {
+            class: "money-view",
+            style: "display: inline-flex; gap: 8px; align-items: center;",
+            select {
+                value: if mode() == MoneyViewMode::Current { "current" } else { "stored" },
+                onchange: move |event| {
+                    if event.value() == "current" {
+                        mode.set(MoneyViewMode::Current);
+                        current_amount.set(money.on_time(Timestamp::now()).amount);
+                    } else {
+                        mode.set(MoneyViewMode::Stored);
+                    }
+                },
+                option { value: "current", "aktuell" }
+                option { value: "stored", "gespeichert" }
+            }
+            span { "{shown_amount}" }
         }
     }
 }

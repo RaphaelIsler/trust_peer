@@ -137,6 +137,15 @@ pub fn TimestampView(timestamp: Timestamp) -> Element {
     }
 }
 
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+#[component]
+pub fn TimestampU64View(value: u64) -> Element {
+    let text = Timestamp::from_raw(value).to_local_string();
+    rsx! {
+        span { "{text}" }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

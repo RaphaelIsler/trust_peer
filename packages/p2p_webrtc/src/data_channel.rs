@@ -3,6 +3,7 @@
 //! Manages WebRTC DataChannels for reliable, ordered message delivery.
 
 use crate::error::{Error, Result};
+use crate::{PeerId};
 use log::{debug, info};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
@@ -14,8 +15,8 @@ use webrtc::peer_connection::RTCPeerConnection;
 #[derive(Clone)]
 pub struct DataChannel {
     channel: Arc<RTCDataChannel>,
-    pub own_peer_id: String,
-    pub remote_peer_id: String,
+    pub own_peer_id: PeerId,
+    pub remote_peer_id: PeerId,
 }
 
 impl DataChannel {
@@ -23,8 +24,8 @@ impl DataChannel {
     pub async fn get_or_create(
         peer: Arc<RTCPeerConnection>,
         is_initiator: bool,
-        own_peer_id: String,
-        remote_peer_id: String,
+        own_peer_id: PeerId,
+        remote_peer_id: PeerId,
     ) -> Result<Self> {
         if is_initiator {
             // Initiator creates the DataChannel
