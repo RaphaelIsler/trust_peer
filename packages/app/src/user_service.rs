@@ -1,18 +1,16 @@
 use anyhow::Result;
 use chrono::NaiveDate;
 use blockchain::Blockchain;
+use crate::block_entry::{AppBlock, BlockEntry};
 use db::DbEntity;
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
-use tokio::task::JoinHandle;
- use tokio::sync::oneshot;
+use std::path::Path;
+use tokio::sync::oneshot;
 use crate::{KeyValue, User, UserId};
 
 #[derive(helper::ServiceWrapper)]
 pub enum Msg {
     GetPrivateAndPublic(oneshot::Sender<Result<(blockchain::blockchain::Id, blockchain::blockchain::Id)>>),
-    GetBlocks{id: blockchain::blockchain::Id, count: usize, start_at: Option<usize>, tx: oneshot::Sender<Result<Vec<blockchain::Block>>>},
+    GetBlocks{id: blockchain::blockchain::Id, count: usize, start_at: Option<usize>, tx: oneshot::Sender<Result<Vec<AppBlock>>>},
 }
 
 #[derive(Clone)]
@@ -57,12 +55,11 @@ impl Service{
 }
 
 struct Internal{
-    user_id: UserId,
     private_chain_db: db::DB,
     key_db: db::DB,
     public_chain_db: db::DB,
-    private_chain: Blockchain,
-    public_chain: Blockchain,
+    private_chain: Blockchain<BlockEntry>,
+    public_chain: Blockchain<BlockEntry>,
 }
 
 
@@ -98,15 +95,15 @@ impl Internal {
             .await?;
 
         let private_pub = ret.add_key_pair(&ret.private_chain.id().inner()).await?;
-        let fist_private = blockchain::BlockEntry::new_verification(&private_pub)?;
+        let fist_private = BlockEntry::new_verification(&private_pub)?;
         let first_block = ret.private_chain.append_entries_with_db(vec![fist_private], &ret.private_chain_db).await?;
 
         let public_pub = ret.add_key_pair(&ret.public_chain.id().inner()).await?;
-        let fist_public = blockchain::BlockEntry::new_verification(&public_pub)?;
+        let fist_public = BlockEntry::new_verification(&public_pub)?;
         let first_link = blockchain::BlockLink::from_block(ret.private_chain.id(), &first_block)?;
 
 
-        ret.public_chain.append_entries_with_db(vec![fist_public, blockchain::BlockEntry::from_link(first_link)?], &ret.public_chain_db).await?;
+        ret.public_chain.append_entries_with_db(vec![fist_public, BlockEntry::from_link(first_link)?], &ret.public_chain_db).await?;
         Ok(ret)
     }
 
@@ -131,11 +128,10 @@ impl Internal {
         Self::init_public_db(&mut public_chain_db).await?;
         Self::init_key_db(&mut key_db).await?;
 
-        let private_chain = Blockchain::from_db(&mut private_chain_db).await?;
-        let public_chain = Blockchain::from_db(&mut public_chain_db).await?;
+        let private_chain = Blockchain::<BlockEntry>::from_db(&mut private_chain_db).await?;
+        let public_chain = Blockchain::<BlockEntry>::from_db(&mut public_chain_db).await?;
 
         Ok(Self {
-            user_id: user_id.clone(),
             private_chain_db,
             public_chain_db,
             key_db,
@@ -149,7 +145,7 @@ impl Internal {
     /// Initializes the private database (contains user info, keys, blockchains)
     async fn init_private_db(private_db: &mut db::DB) -> Result<()> {
         // User table via User DbEntity
-        private_db.migrate_table::<blockchain::Block>().await?;
+        private_db.migrate_table::<AppBlock>().await?;
 
         Ok(())
     }
@@ -164,7 +160,7 @@ impl Internal {
     /// Initializes the public database (only blockchains)
     async fn init_public_db(public_db: &mut db::DB) -> Result<()> {
         // Blockchains table via Blockchain DbEntity
-        public_db.migrate_table::<blockchain::Block>().await?;
+        public_db.migrate_table::<AppBlock>().await?;
         Ok(())
     }
 

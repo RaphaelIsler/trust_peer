@@ -1,19 +1,25 @@
 
-use super::{Block, BlockEntry};
+use super::Block;
 use db::DbEntity;
 use anyhow::Result;
 use chrono::Utc;
 use dioxus::prelude::*;
-
-pub type Id = helper::UId<Blockchain>;
+use serde::de::DeserializeOwned;
 
 #[derive(Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct Blockchain{
+pub struct BlockchainIdMarker;
+pub type Id = helper::UId<BlockchainIdMarker>;
+
+#[derive(Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Blockchain<T> {
     id: Id,
-    blocks: Vec<Block>,
+    blocks: Vec<Block<T>>,
 }
 
-impl Blockchain{
+impl<T> Blockchain<T>
+where
+    T: serde::Serialize + DeserializeOwned + Clone + PartialEq + Eq,
+{
     pub fn new() -> Self{
         Self{
             id: Id::new(),
@@ -25,11 +31,11 @@ impl Blockchain{
         &self.id
     }
 
-    pub fn blocks(&self) -> &Vec<Block> {
+    pub fn blocks(&self) -> &Vec<Block<T>> {
         &self.blocks
     }
 
-    pub async fn block_from(&self, count: usize, start_at: Option<usize>) -> Vec<Block> {
+    pub async fn block_from(&self, count: usize, start_at: Option<usize>) -> Vec<Block<T>> {
         let start_index = start_at.unwrap_or(0);
         self.blocks
             .iter()
@@ -39,11 +45,11 @@ impl Blockchain{
             .collect()
     }
 
-    pub fn append_entry(&mut self, entry: BlockEntry) -> Result<Block> {
+    pub fn append_entry(&mut self, entry: T) -> Result<Block<T>> {
         self.append_entries(vec![entry])
     }
 
-    pub fn append_entries(&mut self, entries: Vec<BlockEntry>) -> Result<Block> {
+    pub fn append_entries(&mut self, entries: Vec<T>) -> Result<Block<T>> {
         let block = self.build_block(entries)?;
         self.blocks.push(block);
         Ok(self.blocks.last().expect("block just pushed").clone())
@@ -51,17 +57,17 @@ impl Blockchain{
 
     pub async fn append_entries_with_db(
         &mut self,
-        entries: Vec<BlockEntry>,
+        entries: Vec<T>,
         database: &db::DB,
-    ) -> Result<Block> {
-        database.migrate_table::<Block>().await?;
+    ) -> Result<Block<T>> {
+        database.migrate_table::<Block<T>>().await?;
         let block = self.build_block(entries)?;
         block.write(database.connection()).await?;
         self.blocks.push(block);
         Ok(self.blocks.last().expect("block just pushed").clone())
     }
 
-    fn build_block(&self, data: Vec<BlockEntry>) -> Result<Block> {
+    fn build_block(&self, data: Vec<T>) -> Result<Block<T>> {
         if self.blocks.is_empty() {
             Ok(Block {
                 version: 0,
@@ -86,7 +92,10 @@ impl Blockchain{
 }
 
 #[component]
-pub fn BlockchainView(chain: Blockchain) -> Element {
+pub fn BlockchainView<T>(chain: Blockchain<T>) -> Element
+where
+    T: serde::Serialize + DeserializeOwned + Clone + PartialEq + Eq + 'static,
+{
     let blocks = chain.blocks().clone();
     let empty_view = if blocks.is_empty() {
         Some(rsx! {
@@ -108,11 +117,14 @@ pub fn BlockchainView(chain: Blockchain) -> Element {
 }
 
 
-impl Blockchain{
+impl<T> Blockchain<T>
+where
+    T: serde::Serialize + DeserializeOwned + Clone + PartialEq + Eq,
+{
     pub async fn from_db(database: &mut db::DB) -> Result<Self>{
         let mut blockchain = Self::new();
-        database.migrate_table::<Block>().await?;
-        let blocks = Block::list(database.connection()).await?;
+        database.migrate_table::<Block<T>>().await?;
+        let blocks = Block::<T>::list(database.connection()).await?;
         blockchain.blocks = blocks;
         Ok(blockchain)
     }

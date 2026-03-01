@@ -13,6 +13,7 @@ serde = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
+hex = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
 sqlx = { workspace = true, optional = true }

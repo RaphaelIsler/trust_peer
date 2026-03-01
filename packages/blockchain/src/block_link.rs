@@ -4,6 +4,7 @@ use super::{Block};
 use crypto::{Hash, Salt};
 use crate::block::hex_preview;
 use dioxus::prelude::*;
+use serde::de::DeserializeOwned;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct BlockLink{
@@ -14,7 +15,10 @@ pub struct BlockLink{
 }
 
 impl BlockLink{
-    pub fn from_block(to_blockchain: &super::blockchain::Id, block: &Block) -> anyhow::Result<Self> {
+    pub fn from_block<T>(to_blockchain: &super::blockchain::Id, block: &Block<T>) -> anyhow::Result<Self>
+    where
+        T: serde::Serialize + DeserializeOwned + Clone + PartialEq + Eq,
+    {
         let mut rng = rand::thread_rng();
         let random_bytes: [u8; 32] = rng.gen(); // 32 Bytes = 256 Bit
 

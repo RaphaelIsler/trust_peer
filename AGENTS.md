@@ -20,6 +20,10 @@ Stack: Rust, Dioxus, Sqlite, WebRTC
 - For complex tasks: explain plan first
 - If unsure: ask clarifying questions
 - Prefer incremental changes
+- Report only delta changes (new edits made in the current task), not the full working tree diff.
+- Before applying a patch, verify whether the target lines are already present to avoid duplicate/redundant edits.
+- In summaries, separate clearly: "already existing changes" vs "changes made in this task".
+- When showing file changes, prefer file-local diffs for touched files instead of broad repository-level summaries.
 
 
 If there is a conflict:

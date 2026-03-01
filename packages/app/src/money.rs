@@ -1,73 +1,103 @@
-pub fn calculate_wealth(
-    start_time: f64,
-    initial_wealth: f64,
-    linear_income_rate: f64,   // income per unit time
-    interest_rate: f64,        // e.g. 0.05 for 5%
-    target_time: f64,
-) -> f64 {
-    let delta_t = target_time - start_time;
+use serde::{Serialize, Deserialize};
+use super::timestamp::Timestamp;
+use crate::q32_32::Q32_32;
 
-    if delta_t <= 0.0 {
-        return initial_wealth;
-    }
 
-    // Handle zero interest separately to avoid division by zero
-    if interest_rate.abs() < f64::EPSILON {
-        return initial_wealth + linear_income_rate * delta_t;
-    }
+///80% after 3 months
+const DECAY_RATE_Q32_32: Q32_32 = Q32_32::from_f64(0.00075);
 
-    let exp_term = (interest_rate * delta_t).exp();
-
-    initial_wealth * exp_term
-        + (linear_income_rate / interest_rate) * (exp_term - 1.0)
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Money{
+    amount: Q32_32,
+    timestamp: Timestamp,
+    decay_rate: u32, // the _32 of Q32_32
+    income_rate: u32, // the 32_ of Q32_32 for income
 }
 
-pub fn required_interest_rate(
-    initial_wealth: f64,
-    linear_income_rate: f64,
-    time: f64,
-    zins_faktor: f64, // k = Faktor wie stark Zins den Zufluss ergänzt
-) -> Option<f64> {
-    if time <= 0.0 || linear_income_rate <= 0.0 {
-        return None;
-    }
-
-    // Zielvermögen: linearer Zufluss + Faktor*linearer Zufluss
-    let target = initial_wealth + linear_income_rate * time * (1.0 + zins_faktor);
-
-    // Funktion f(r) = calculate_wealth(...) - target
-    let f = |r: f64| -> f64 {
-        calculate_wealth(
-            0.0,                  // start_time = 0, wir arbeiten mit delta_t = time
-            initial_wealth,
-            linear_income_rate,
-            r,
-            time
-        ) - target
-    };
-
-    let mut low = 0.0;
-    let mut high = 0.1;
-
-    // Obergrenze hochskalieren bis f(high) > 0
-    while f(high) < 0.0 {
-        high *= 2.0;
-        if high > 1000.0 {
-            return None; // keine Lösung in realistischem Bereich
+impl Default for Money {
+    fn default() -> Self {
+        Self {
+            amount: Q32_32::from_u64(0), // Default initial amount
+            timestamp: Timestamp::now(), // Default to current time
+            decay_rate: DECAY_RATE_Q32_32.get_decimal_part(), // Default decay rate
+            income_rate: 200, // No linear income by default
         }
     }
+}
 
-    // Binary Search
-    for _ in 0..100 {
-        let mid = (low + high) / 2.0;
-        if f(mid) > 0.0 {
-            high = mid;
-        } else {
-            low = mid;
+
+/// Calculate wealth using Q32.32 fixed-point (u64) and no_std-friendly math.
+/// - time is in seconds (Q32.32)
+/// - linear_income_rate is income per second (Q32.32)
+/// - interest_rate is continuous rate per second (Q32.32)
+impl Money{
+    pub fn on_time(self, target_time: Timestamp) -> Money {
+
+        if target_time <= self.timestamp {
+            return self.clone();
+        }
+        let diff = target_time - self.timestamp;
+        let delta_t = Q32_32::from_u64(diff) / Q32_32::from_u64(3600);
+        let decay_rate = Q32_32::from_decimal_part(self.decay_rate);
+        let linear_income_rate = Q32_32::from_u64(self.income_rate as u64);
+
+        if decay_rate.raw() == 0 {
+            let linear_income = linear_income_rate * delta_t;
+            return Self{
+                amount: self.amount.saturating_add(linear_income),
+                timestamp: target_time,
+                decay_rate: self.decay_rate,
+                income_rate: self.income_rate,
+            };
+        }
+
+        let r_dt = decay_rate * delta_t;
+        let exp_term = r_dt.exp();
+
+        let part1 = self.amount * exp_term;
+        let linear_over_r = linear_income_rate / decay_rate;
+        let exp_minus_one = exp_term.saturating_sub(Q32_32::ONE);
+        let part2 = linear_over_r * exp_minus_one;
+
+        Self{
+            amount: part1.saturating_add(part2),
+            timestamp: target_time,
+            decay_rate: self.decay_rate,
+            income_rate: self.income_rate,
         }
     }
+}
 
-    Some((low + high) / 2.0)
+
+impl core::ops::Add for Money {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        if self.timestamp == rhs.timestamp {
+            Self{
+                amount: self.amount.saturating_add(rhs.amount),
+                timestamp: self.timestamp,
+                decay_rate: self.decay_rate,
+                income_rate: self.income_rate + rhs.income_rate,
+            }
+        } else if self.timestamp > rhs.timestamp {
+            let same_time_rhs = rhs.on_time(self.timestamp);
+            Self{
+                amount: self.amount.saturating_add(same_time_rhs.amount),
+                timestamp: self.timestamp,
+                decay_rate: self.decay_rate,
+                income_rate: self.income_rate + same_time_rhs.income_rate,
+            }
+        } else{
+            let same_time_self = self.on_time(rhs.timestamp);
+            Self{
+                amount: same_time_self.amount.saturating_add(rhs.amount),
+                timestamp: rhs.timestamp,
+                decay_rate: self.decay_rate,
+                income_rate: self.income_rate + rhs.income_rate,
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -75,28 +105,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_calculate_wealth() {
-        let start_time = 0.0;
-        let initial_wealth = 1000.0;
-        let linear_income_rate = 50.0;
-        let interest_rate = 0.05;
-        let target_time = 10.0;
+    fn test_calculate_wealth_q32_32_no_std_linear_only() {
+        let start_time = Q32_32::from_u64(0).raw();
+        let initial_wealth = Q32_32::from_u64(10).raw();
+        let linear_income_rate = Q32_32::from_u64(2).raw();
+        let interest_rate = Q32_32::ZERO.raw();
+        let target_time = Q32_32::from_u64(3).raw();
 
-        let wealth = calculate_wealth(start_time, initial_wealth, linear_income_rate, interest_rate, target_time);
-        assert!(wealth > initial_wealth);
+        let result = calculate_wealth_q32_32_no_std(
+            start_time,
+            initial_wealth,
+            linear_income_rate,
+            interest_rate,
+            target_time,
+        );
+
+        let expected = Q32_32::from_u64(16).raw();
+        assert_eq!(result, expected);
     }
 
-    #[test]
-    fn test_required_interest_rate() {
-        let initial_wealth = 1.0;
-        let linear_income_rate = 4000.0 / 3600.0;
-        let time = 60.0*60.0*24.0*90.0; // 3 Month
-
-        let rate = required_interest_rate(initial_wealth, linear_income_rate, time, 1.0).unwrap();
-        let sum = calculate_wealth(0.0, 0.0, linear_income_rate, rate, time);
-        let mal_rate = sum * rate;
-        println!("Required interest rate: {:.9}%, summe bis dann; {}, mal rate: {}, income {}", rate * 100.0, sum, mal_rate, linear_income_rate);
-        assert!(rate > 0.0);
-
-    }
 }

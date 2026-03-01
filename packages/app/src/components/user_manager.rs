@@ -5,9 +5,7 @@ use crate::{Service, User, UserDatabase};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 use chrono::NaiveDate;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-use blockchain::Block;
-#[cfg(any(feature = "desktop", feature = "mobile"))]
-use blockchain::BlockView;
+use crate::block_entry::{AppBlock, BlockView};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 use std::collections::HashMap;
 
@@ -80,8 +78,6 @@ pub fn UserManager() -> Element {
                             user_services
                                 .write()
                                 .insert(user_id, service);
-                            let mut user_services = user_services.clone();
-                            let mut error_message = error_message.clone();
                             show_form.set(false);
                             error_message.set(None);
                         },
@@ -241,12 +237,12 @@ fn CreateUserForm(on_submit: EventHandler<(User, crate::user_service::Service)>,
 #[component]
 fn UserCard(user: User, service: Service) -> Element {
     let mut show_details = use_signal(|| false);
-    let mut selected_chain = use_signal(|| None::<blockchain::blockchain::Id>);
+    let selected_chain = use_signal(|| None::<blockchain::blockchain::Id>);
     let mut private_id = use_signal(|| None::<blockchain::blockchain::Id>);
     let mut public_id = use_signal(|| None::<blockchain::blockchain::Id>);
-    let mut active_chain = use_signal(|| None::<Vec<Block>>);
+    let active_chain = use_signal(|| None::<Vec<AppBlock>>);
     let mut chain_error = use_signal(|| None::<String>);
-    let mut chain_loading = use_signal(|| false);
+    let chain_loading = use_signal(|| false);
 
     if private_id().is_none() {
         let service = service.clone();
@@ -333,7 +329,6 @@ fn UserCard(user: User, service: Service) -> Element {
                     div { style: "margin: 16px 0; display: flex; gap: 8px;",
                         button {
                             onclick: {
-                                let user_id = user.id.clone();
                                 let active_chain = active_chain.clone();
                                 let selected_chain = selected_chain.clone();
                                 let chain_loading = chain_loading.clone();
@@ -353,7 +348,6 @@ fn UserCard(user: User, service: Service) -> Element {
                         }
                         button {
                             onclick: {
-                                let user_id = user.id.clone();
                                 let active_chain = active_chain.clone();
                                 let selected_chain = selected_chain.clone();
                                 let chain_loading = chain_loading.clone();
@@ -410,7 +404,7 @@ async fn create_user(
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 fn select_chain(
     selection: Option<blockchain::blockchain::Id>,
-    mut chain: Signal<Option<Vec<Block>>>,
+    mut chain: Signal<Option<Vec<AppBlock>>>,
     mut selected_chain: Signal<Option<blockchain::blockchain::Id>>,
     mut chain_loading: Signal<bool>,
     mut chain_error: Signal<Option<String>>,

@@ -9,6 +9,8 @@
 - User management lives inside packages/app (user.rs, user_db.rs, user_databases.rs, error.rs).
 - Per-user data uses private/public SQLite databases in user-specific folders.
 - Db entities implement db::DbEntity; migrations handled through db::DB.
+- `packages/blockchain` is payload-agnostic (`Block<T>`, `Blockchain<T>`).
+- App-specific chain payloads (for example `BlockEntry`) are defined in `packages/app`.
 
 ## Conventions
 - Dioxus 0.7 API: no cx/Scope/use_state; use signals/hooks.

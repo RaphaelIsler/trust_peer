@@ -1,23 +1,27 @@
-use crypto::{Salt, Signature};
 use anyhow::Result;
-use super::block_link::BlockLink;
-use super::block_link::BlockLinkView;
-use crate::block::hex_preview;
+use blockchain::{Block, BlockHeaderView, BlockLink, BlockLinkView};
+use crypto::{Salt, Signature};
 use dioxus::prelude::*;
 
-
-pub type Id = helper::UId<BlockEntry>;
-
+pub type AppBlock = Block<BlockEntry>;
 
 #[derive(Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum BlockEntry{
-    Verification{salt: Salt, public: crypto::PublicKey, signature: Signature},
-    Identification{data: Vec<u8>},
+pub enum BlockEntry {
+    Verification {
+        salt: Salt,
+        public: crypto::PublicKey,
+        signature: Signature,
+    },
+    Identification {
+        data: Vec<u8>,
+    },
     Link(BlockLink),
+    CurrentAmount{
+        money: money::Money,
+    }
 }
 
-
-impl BlockEntry{
+impl BlockEntry {
     pub fn new_verification(key: &crypto::KeyMeta) -> Result<Self> {
         let salt = Salt::new();
         let signature = Signature::new(&key.private_key, &salt.0)?;
@@ -50,7 +54,11 @@ pub fn BlockEntryList(entries: Vec<BlockEntry>) -> Element {
 #[component]
 pub fn BlockEntryView(entry: BlockEntry) -> Element {
     match entry {
-        BlockEntry::Verification { salt, public, signature } => {
+        BlockEntry::Verification {
+            salt,
+            public,
+            signature,
+        } => {
             let salt_preview = hex_preview(&salt.0, 12);
             let public_preview = hex_preview(public.as_bytes(), 12);
             let signature_len = signature.as_bytes().len();
@@ -85,4 +93,32 @@ pub fn BlockEntryView(entry: BlockEntry) -> Element {
             }
         }
     }
+}
+
+#[component]
+pub fn BlockView(block: AppBlock, index: usize) -> Element {
+    let header = block.header().clone();
+    let entries = block.data().clone();
+    let entry_count = entries.len();
+
+    rsx! {
+        section { class: "block",
+            h3 { class: "block__title", "Block #{index}" }
+            BlockHeaderView { header }
+            div { class: "block__meta", "Entries: {entry_count}" }
+            BlockEntryList { entries }
+        }
+    }
+}
+
+fn hex_preview(bytes: &[u8], max_chars: usize) -> String {
+    let hex = hex::encode(bytes);
+    if hex.len() <= max_chars {
+        return hex;
+    }
+
+    let mut out = String::with_capacity(max_chars + 1);
+    out.push_str(&hex[..max_chars]);
+    out.push('…');
+    out
 }

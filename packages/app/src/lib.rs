@@ -3,6 +3,8 @@
 pub mod components;
 pub mod server_fn;
 mod money;
+pub mod q32_32;
+pub mod timestamp;
 use std::path::PathBuf;
 /// Returns the data directory for the application
 pub fn get_data_directory() -> anyhow::Result<PathBuf> {
@@ -41,6 +43,8 @@ pub mod user_db;
 pub mod user_init;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub mod user_service;
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+pub mod block_entry;
 
 pub use components::*;
 
@@ -54,3 +58,5 @@ pub use user::{User, UserId};
 pub use user_service::Service;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub use user_db::UserDatabase;
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+pub use block_entry::{AppBlock, BlockEntry};

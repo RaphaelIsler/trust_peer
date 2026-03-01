@@ -1,10 +1,9 @@
-pub type Id = helper::I64Id<Block>;
-use crate::block_entry::BlockEntry;
-use crate::block_entry::BlockEntryList;
-use crate::block_link::BlockLinkList;
+#[derive(Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct BlockIdMarker;
+pub type Id = helper::I64Id<BlockIdMarker>;
 use db::DbEntity;
+use serde::de::DeserializeOwned;
 
-use super::BlockLink;
 use crypto::Hash;
 use anyhow::Result;
 use sqlx::{Row, SqlitePool};
@@ -26,7 +25,7 @@ impl Header{
         }
     }
 
-    fn from_block(block: &Block) -> anyhow::Result<Self>{
+    fn from_block<T>(block: &Block<T>) -> anyhow::Result<Self> where T: serde::Serialize + DeserializeOwned + Clone + PartialEq + Eq{
         Ok(Self{
             id: block.id().inc(),
             prev_hash: block.hash()?,
@@ -36,13 +35,16 @@ impl Header{
 }
 
 #[derive(Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct Block{
+pub struct Block<T> {
     pub version: u16,
     pub header: Header,
-    pub data: Vec<BlockEntry>,
+    pub data: Vec<T>,
 }
 
-impl Block{
+impl<T> Block<T>
+where
+    T: serde::Serialize + DeserializeOwned + Clone + PartialEq + Eq,
+{
     pub fn init() -> Self{
         Self{
             version: 1,
@@ -68,12 +70,15 @@ impl Block{
         &self.header
     }
 
-    pub fn data(&self) -> &Vec<BlockEntry> {
+    pub fn data(&self) -> &Vec<T> {
         &self.data
     }
 }
 
-impl DbEntity for Block {
+impl<T> DbEntity for Block<T>
+where
+    T: serde::Serialize + DeserializeOwned + Clone + PartialEq + Eq,
+{
     type Id = Id;
 
     fn id(&self) -> &Self::Id {
@@ -153,7 +158,7 @@ impl DbEntity for Block {
             let prev_hash: Vec<u8> = row.try_get(1)?;
             let timestamp: i64 = row.try_get(2)?;
             let data_bytes: Vec<u8> = row.try_get(3)?;
-            let data: Vec<BlockEntry> = bincode::deserialize(&data_bytes)?;
+            let data: Vec<T> = bincode::deserialize(&data_bytes)?;
 
             let mut prev_hash_array = [0u8; 32];
             prev_hash_array.copy_from_slice(&prev_hash);
@@ -221,17 +226,18 @@ pub fn BlockHeaderView(header: Header) -> Element {
 }
 
 #[component]
-pub fn BlockView(block: Block, index: usize) -> Element {
+pub fn BlockView<T>(block: Block<T>, index: usize) -> Element
+where
+    T: serde::Serialize + DeserializeOwned + Clone + PartialEq + Eq + 'static,
+{
     let header = block.header().clone();
-    let entries = block.data().clone();
-    let entry_count = entries.len();
+    let entry_count = block.data().len();
 
     rsx! {
         section { class: "block",
             h3 { class: "block__title", "Block #{index}" }
             BlockHeaderView { header }
             div { class: "block__meta", "Entries: {entry_count}" }
-            BlockEntryList { entries }
         }
     }
 }

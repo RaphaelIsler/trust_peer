@@ -9,21 +9,10 @@ fn main() {
         .filter_level(log::LevelFilter::Debug)
         .init();
 
-    // Initialize user database at startup
-    if let Err(e) = init_database() {
-        eprintln!("Error initializing database: {}", e);
-    }
 
     dioxus::launch(App);
 }
 
-fn init_database() -> anyhow::Result<()> {
-    let rt = tokio::runtime::Runtime::new()?;
-    rt.block_on(async {
-        let _db_path = app::user_init::init_user_database().await?;
-        Ok(())
-    })
-}
 
 #[component]
 #[allow(non_snake_case)]
