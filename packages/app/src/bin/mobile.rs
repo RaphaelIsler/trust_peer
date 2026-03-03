@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use app::{P2PTestComponent, UserManager};
+use app::{UserManager};
 
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
@@ -17,6 +17,5 @@ fn App() -> Element {
         // Global app resources
         document::Link { rel: "stylesheet", href: MAIN_CSS }
         UserManager {}
-        P2PTestComponent {}
     }
 }

@@ -3,8 +3,6 @@
 pub mod components;
 pub mod server_fn;
 mod money;
-pub mod q32_32;
-pub mod timestamp;
 use std::path::PathBuf;
 /// Returns the data directory for the application
 pub fn get_data_directory() -> anyhow::Result<PathBuf> {
@@ -33,20 +31,18 @@ pub fn get_data_directory() -> anyhow::Result<PathBuf> {
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub mod error;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-pub mod key_value;
-#[cfg(any(feature = "desktop", feature = "mobile"))]
 pub mod user;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub mod user_db;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-pub mod user_connection;
+pub mod peer_connection;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub mod bank_account;
 
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub mod user_init;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-pub mod user_service;
+pub mod ledger_node;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub mod block_entry;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
@@ -57,25 +53,26 @@ pub use money::Money;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub use money::MoneyView;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-pub use timestamp::{TimestampU64View, TimestampView};
+pub use core_types::{TimestampU64View, TimestampView};
 
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub use error::{Result, UserError};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-pub use key_value::{KeyValue, Value};
+pub use core_types::{KeyValue, Value};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub use user::{User, UserId};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-pub use user_connection::{Transport as UserConnectionTransport, UserConnection, WebRtcIds};
+pub use peer_connection::{Transport as PeerConnectionTransport, PeerConnection, WebRtcIds};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-pub use user_connection::{WebRtcIdsInputView, WebRtcIdsShareView};
+pub use peer_connection::{PeerConnectionView, WebRtcIdsInputView, WebRtcIdsShareView};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub use bank_account::{BankAccount, BankAccountId, BankAccountView};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-pub use user_service::Service;
+pub use ledger_node::ui::LedgerNode;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub use user_db::UserDatabase;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub use block_entry::{AppBlock, BlockEntry};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub use blockchain_validation::{verify_money_with_state, MoneyValidationState};
+pub use core_types::{Q32_32, Timestamp};

@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 use sqlx::{Row, SqlitePool};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::path::{Path, PathBuf};
-use crate::{Service, User, UserId, Result, UserError};
+use crate::{LedgerNode, User, UserId, Result, UserError};
 
 /// Central management of all users
 pub struct UserDatabase {
@@ -78,11 +78,11 @@ impl UserDatabase {
         last_name: String,
         middle_name: Option<String>,
         date_of_birth: NaiveDate,
-    ) -> Result<(User, Service)> {
+    ) -> Result<(User, LedgerNode)> {
         let user = User::new(first_name, last_name)?;
         user.validate()?;
 
-        let user_service = Service::create_new_instance(
+        let user_service = LedgerNode::create_new_instance(
             &self.base_data_path,
             &user,
             middle_name,

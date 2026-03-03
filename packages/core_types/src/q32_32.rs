@@ -1,9 +1,7 @@
 use core::fmt;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
-use dioxus::html::link::r#as;
 use serde::{Deserialize, Serialize};
 
-/// Q32.32 fixed-point type (no_std friendly).
 #[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
 pub struct Q32_32(u64);
 
@@ -11,7 +9,7 @@ impl Q32_32 {
     pub const FRAC_BITS: u32 = 32;
     pub const ONE: Self = Self(1u64 << 32);
     pub const ZERO: Self = Self(0);
-    pub const LN2: Self = Self(2_977_044_471); // ln(2) * 2^32
+    pub const LN2: Self = Self(2_977_044_471);
 
     pub const fn from_raw(raw: u64) -> Self {
         Self(raw)
@@ -32,7 +30,6 @@ impl Q32_32 {
         self.0 >> Self::FRAC_BITS
     }
 
-    // Create a Q32.32 from a fraction (e.g. 1/100) where the input is the denominator.
     pub const fn from_decimal_part(value: u32) -> Self {
         Self(value as u64)
     }
@@ -82,9 +79,6 @@ impl Q32_32 {
         }
     }
 
-    /// exp(x) for Q32.32, x >= 0.
-    /// Uses range reduction by ln(2) and a Taylor series for the remainder.
-    /// Saturates on overflow.
     pub fn exp(self) -> Self {
         if self.0 == 0 {
             return Self::ONE;

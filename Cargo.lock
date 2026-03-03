@@ -147,6 +147,7 @@ dependencies = [
  "anyhow",
  "blockchain",
  "chrono",
+ "core_types",
  "crypto",
  "db",
  "dioxus",
@@ -1109,6 +1110,18 @@ dependencies = [
  "bitflags 2.11.0",
  "core-foundation 0.10.1",
  "libc",
+]
+
+[[package]]
+name = "core_types"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "db",
+ "dioxus",
+ "serde",
+ "sqlx",
 ]
 
 [[package]]

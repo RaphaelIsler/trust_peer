@@ -151,7 +151,6 @@ impl TryFrom<&Value> for u64 {
     }
 }
 
-/// Simple key-value storage entry
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KeyValue {
     pub key: String,

@@ -4,6 +4,7 @@ members = [
     "packages/app",
     "packages/api",
     "packages/blockchain",
+    "packages/core_types",
     "packages/crypto",
     "packages/coordinator",
     "packages/db",

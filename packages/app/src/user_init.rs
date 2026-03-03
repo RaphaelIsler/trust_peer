@@ -1,5 +1,5 @@
 use anyhow::Result;
-use crate::{Service, User, UserDatabase};
+use crate::{User, UserDatabase};
 use std::path::PathBuf;
 
 
@@ -43,7 +43,7 @@ pub async fn list_all_users(db_path: &PathBuf) -> Result<Vec<User>> {
     let users = db.list_users().await?;
 
     for user in users {
-        Service::start_background(base_path.clone(), user.id.clone());
+        LedgerNode::start_background(base_path.clone(), user.id.clone());
     }
 
     Ok(())

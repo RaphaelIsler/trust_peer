@@ -2,7 +2,7 @@ use anyhow::Result;
 use blockchain::{Block, BlockHeaderView, BlockLink, BlockLinkView};
 use crypto::{Salt, Signature};
 use crate::money::{Money, MoneyView, MoneyViewMode};
-use crate::timestamp::TimestampView;
+use core_types::TimestampView;
 use dioxus::prelude::*;
 
 pub type AppBlock = Block<BlockEntry>;

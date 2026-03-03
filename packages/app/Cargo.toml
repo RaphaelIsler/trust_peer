@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
+core_types = { path = "../core_types" }
 crypto = { path = "../crypto", optional = true }
 blockchain = { path = "../blockchain", optional = true }
 db = { path = "../db", optional = true }
@@ -25,8 +26,8 @@ uuid = { workspace = true, features = ["v4"] }
 default = []
 server = ["dioxus/server", "tokio", "crypto", "blockchain"]
 web = ["dioxus/web"]
-desktop = ["dioxus/desktop", "chrono", "tokio", "p2p_webrtc", "db", "blockchain", "crypto", "sqlx", "thiserror", "helper"]
-mobile = ["dioxus/mobile", "chrono", "tokio", "p2p_webrtc", "db", "blockchain", "crypto", "sqlx", "thiserror", "helper"]
+desktop = ["dioxus/desktop", "chrono", "tokio", "p2p_webrtc", "db", "blockchain", "crypto", "sqlx", "thiserror", "helper", "core_types/desktop"]
+mobile = ["dioxus/mobile", "chrono", "tokio", "p2p_webrtc", "db", "blockchain", "crypto", "sqlx", "thiserror", "helper", "core_types/mobile"]
 
 # Multiple binaries for different platforms
 [[bin]]

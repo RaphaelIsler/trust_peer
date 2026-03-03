@@ -8,7 +8,6 @@ use chrono::{Local, TimeZone};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 use dioxus::prelude::*;
 
-/// Unix timestamp in seconds.
 #[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
 pub struct Timestamp(u64);
 

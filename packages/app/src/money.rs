@@ -1,6 +1,5 @@
 use serde::{Serialize, Deserialize};
-use super::timestamp::Timestamp;
-use crate::q32_32::Q32_32;
+use core_types::{Q32_32, Timestamp};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 use dioxus::prelude::*;
 #[cfg(any(feature = "desktop", feature = "mobile"))]

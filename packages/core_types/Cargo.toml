@@ -1,0 +1,17 @@
+[package]
+name = "core_types"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+sqlx = { workspace = true }
+db = { path = "../db" }
+chrono = { workspace = true, optional = true }
+dioxus = { workspace = true, optional = true }
+
+[features]
+default = []
+desktop = ["chrono", "dioxus"]
+mobile = ["chrono", "dioxus"]

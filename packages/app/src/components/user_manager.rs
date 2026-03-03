@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-use crate::{Service, User, UserDatabase, WebRtcIds, WebRtcIdsInputView, WebRtcIdsShareView};
+use crate::{LedgerNode, PeerConnection, PeerConnectionView, User, UserDatabase, WebRtcIds, WebRtcIdsInputView, WebRtcIdsShareView};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 use chrono::NaiveDate;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
@@ -17,7 +17,7 @@ pub fn UserManager() -> Element {
         let mut users = use_signal(|| Vec::<User>::new());
         let mut show_form = use_signal(|| false);
         let mut error_message = use_signal(|| None::<String>);
-        let mut user_services = use_signal(|| HashMap::<String, crate::user_service::Service>::new());
+        let mut user_services = use_signal(|| HashMap::<String, crate::ledger_node::ui::LedgerNode>::new());
         // Lade Benutzer beim ersten Render
         use_effect(move || {
             spawn(async move {
@@ -26,7 +26,7 @@ pub fn UserManager() -> Element {
                         Ok(user_list) => {
                             let mut services_map = user_services.write();
                             for user in &user_list {
-                                let service = match Service::start(base_path.clone(), &user.id).await {
+                                let service = match LedgerNode::start(base_path.clone(), &user.id).await {
                                     Ok(service) => service,
                                     Err(e) => {
                                         error_message.set(Some(format!(
@@ -72,7 +72,7 @@ pub fn UserManager() -> Element {
 
                 if show_form() {
                     CreateUserForm {
-                        on_submit: move |(user, service): (User, crate::user_service::Service)| {
+                        on_submit: move |(user, service): (User, crate::ledger_node::ui::LedgerNode)| {
                             let user_id = user.id.inner().to_string();
                             users.write().push(user);
                             user_services
@@ -119,7 +119,7 @@ pub fn UserManager() -> Element {
 
 /// Form for creating a new user
 #[component]
-fn CreateUserForm(on_submit: EventHandler<(User, crate::user_service::Service)>, on_error: EventHandler<String>) -> Element {
+fn CreateUserForm(on_submit: EventHandler<(User, crate::ledger_node::ui::LedgerNode)>, on_error: EventHandler<String>) -> Element {
     let mut first_name = use_signal(|| String::new());
     let mut last_name = use_signal(|| String::new());
     let mut middle_name = use_signal(|| String::new());
@@ -235,7 +235,7 @@ fn CreateUserForm(on_submit: EventHandler<(User, crate::user_service::Service)>,
 
 /// Card for displaying a user
 #[component]
-fn UserCard(user: User, service: Service) -> Element {
+fn UserCard(user: User, service: LedgerNode) -> Element {
     let mut show_details = use_signal(|| false);
     let selected_chain = use_signal(|| None::<blockchain::blockchain::Id>);
     let mut private_id = use_signal(|| None::<blockchain::blockchain::Id>);
@@ -246,6 +246,8 @@ fn UserCard(user: User, service: Service) -> Element {
     let mut new_connection_ids = use_signal(|| None::<WebRtcIds>);
     let mut new_connection_error = use_signal(|| None::<String>);
     let mut imported_connection_message = use_signal(|| None::<String>);
+    let mut peer_connections = use_signal(Vec::<PeerConnection>::new);
+    let mut peer_connections_loading = use_signal(|| false);
 
     if private_id().is_none() {
         let service = service.clone();
@@ -257,15 +259,23 @@ fn UserCard(user: User, service: Service) -> Element {
         });
     }
 
-/*    spawn(async move {
-        chain.set(service.get_private_and_public().await.unwrap_or_else(|e| {
-            chain_error.set(Some(format!("Failed to load blocks: {e}")));
-            Vec::new()
-        }));
-        selected_chain.set(Some(selection));
-        chain_loading.set(false);
-    });
-*/
+    if show_details() && !peer_connections_loading() && peer_connections().is_empty() {
+        let service = service.clone();
+        peer_connections_loading.set(true);
+        spawn(async move {
+            match service.get_peer_connections().await {
+                Ok(connections) => {
+                    peer_connections.set(connections);
+                    chain_error.set(None);
+                }
+                Err(error) => {
+                    chain_error.set(Some(format!("Failed to load peer connections: {error}")));
+                }
+            }
+            peer_connections_loading.set(false);
+        });
+    }
+
     let chain_error_view = chain_error().map(|err| {
         rsx! {
             div { style: "margin: 10px 0; color: #b00020;", "{err}" }
@@ -398,9 +408,6 @@ fn UserCard(user: User, service: Service) -> Element {
                                         });
                                         match ids_rx.await {
                                             Ok(Ok(ids)) => {
-                                                new_connection_error
-                                                    .set(Some(format!("Failed to create connection: {error}")));
-                                                }
                                                 imported_connection_message
                                                     .set(Some("Verbindungsaufbau gestartet".to_string()));
                                                 new_connection_ids.set(Some(ids));
@@ -468,6 +475,55 @@ fn UserCard(user: User, service: Service) -> Element {
                         div { style: "margin: 8px 0; color: #146c43;", "{message}" }
                     }
 
+                    div { style: "margin: 16px 0;",
+                        h5 { style: "margin: 0 0 8px 0;", "Peer Connections" }
+                        if peer_connections_loading() {
+                            div { style: "margin: 8px 0; color: #666;", "Loading peer connections..." }
+                        } else if peer_connections().is_empty() {
+                            div { style: "margin: 8px 0; color: #666; font-style: italic;",
+                                "No peer connections"
+                            }
+                        } else {
+                            for connection in peer_connections().iter() {
+                                PeerConnectionView {
+                                    connection: connection.clone(),
+                                    on_save_name: {
+                                        let service = service.clone();
+                                        let mut peer_connections = peer_connections;
+                                        let mut chain_error = chain_error;
+                                        move |(id, name): (blockchain::blockchain::Id, Option<String>)| {
+                                            let service = service.clone();
+                                            let mut next_connections = peer_connections();
+                                            spawn(async move {
+                                                match service.update_peer_connection_name(id.clone(), name.clone()).await
+                                                {
+                                                    Ok(()) => {
+                                                        if let Some(connection) = next_connections
+                                                            .iter_mut()
+                                                            .find(|connection| connection.id == id)
+                                                        {
+                                                            connection.name = name;
+                                                        }
+                                                        peer_connections.set(next_connections);
+                                                        chain_error.set(None);
+                                                    }
+                                                    Err(error) => {
+                                                        chain_error
+                                                            .set(
+                                                                Some(
+                                                                    format!("Failed to save peer connection name: {error}"),
+                                                                ),
+                                                            );
+                                                    }
+                                                }
+                                            });
+                                        }
+                                    },
+                                }
+                            }
+                        }
+                    }
+
                     {chain_error_view}
                     {chain_loading_view}
                     {chain_view}
@@ -494,7 +550,7 @@ async fn create_user(
     last_name: String,
     middle_name: Option<String>,
     date_of_birth: NaiveDate,
-) -> anyhow::Result<(User, Service)> {
+) -> anyhow::Result<(User, LedgerNode)> {
     use crate::user_init::get_db_path;
 
     let db_path = get_db_path()?;
@@ -509,7 +565,7 @@ fn select_chain(
     mut selected_chain: Signal<Option<blockchain::blockchain::Id>>,
     mut chain_loading: Signal<bool>,
     mut chain_error: Signal<Option<String>>,
-    service: crate::user_service::Service,
+    service: crate::ledger_node::ui::LedgerNode,
 ) {
     if selection == selected_chain() {
         return;
