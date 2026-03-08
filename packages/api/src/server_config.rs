@@ -29,9 +29,6 @@ pub struct ApnsConfig {
     pub use_sandbox: bool,
 }
 
-
-
-
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {

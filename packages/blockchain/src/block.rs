@@ -4,29 +4,32 @@ pub type Id = helper::I64Id<BlockIdMarker>;
 use db::DbEntity;
 use serde::de::DeserializeOwned;
 
-use crypto::Hash;
 use anyhow::Result;
-use sqlx::{Row, SqlitePool};
+use crypto::Hash;
 use dioxus::prelude::*;
+use sqlx::{Row, SqlitePool};
 
 #[derive(Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct Header{
+pub struct Header {
     pub id: Id,
     pub prev_hash: Hash,
     pub timestamp: u64,
 }
 
-impl Header{
-    pub fn init() -> Self{
-        Self{
+impl Header {
+    pub fn init() -> Self {
+        Self {
             id: Id::new(0),
             prev_hash: Hash::empty(),
             timestamp: chrono::Utc::now().timestamp() as u64,
         }
     }
 
-    fn from_block<T>(block: &Block<T>) -> anyhow::Result<Self> where T: serde::Serialize + DeserializeOwned + Clone + PartialEq + Eq{
-        Ok(Self{
+    fn from_block<T>(block: &Block<T>) -> anyhow::Result<Self>
+    where
+        T: serde::Serialize + DeserializeOwned + Clone + PartialEq + Eq,
+    {
+        Ok(Self {
             id: block.id().inc(),
             prev_hash: block.hash()?,
             timestamp: chrono::Utc::now().timestamp() as u64,
@@ -45,8 +48,8 @@ impl<T> Block<T>
 where
     T: serde::Serialize + DeserializeOwned + Clone + PartialEq + Eq,
 {
-    pub fn init() -> Self{
-        Self{
+    pub fn init() -> Self {
+        Self {
             version: 1,
             header: Header::init(),
             data: Vec::new(),
@@ -93,7 +96,6 @@ where
         1
     }
 
-
     async fn create_table(conn: &SqlitePool) -> Result<()> {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS blocks (
@@ -107,11 +109,9 @@ where
         .execute(conn)
         .await?;
 
-        sqlx::query(
-            "CREATE INDEX IF NOT EXISTS idx_blocks_timestamp ON blocks(timestamp);",
-        )
-        .execute(conn)
-        .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_blocks_timestamp ON blocks(timestamp);")
+            .execute(conn)
+            .await?;
         Ok(())
     }
 
@@ -130,7 +130,7 @@ where
         let data = bincode::serialize(&self.data)?;
 
         sqlx::query(
-                "INSERT OR REPLACE INTO blocks (id, version, prev_hash, timestamp, data)
+            "INSERT OR REPLACE INTO blocks (id, version, prev_hash, timestamp, data)
                VALUES (?, ?, ?, ?, ?)",
         )
         .bind(id)
@@ -146,12 +146,11 @@ where
     async fn read(conn: &SqlitePool, id: &Self::Id) -> Result<Option<Self>> {
         let id = id.clone();
 
-        let row = sqlx::query(
-            "SELECT version, prev_hash, timestamp, data FROM blocks WHERE id = ?",
-        )
-        .bind(&id)
-        .fetch_optional(conn)
-        .await?;
+        let row =
+            sqlx::query("SELECT version, prev_hash, timestamp, data FROM blocks WHERE id = ?")
+                .bind(&id)
+                .fetch_optional(conn)
+                .await?;
 
         if let Some(row) = row {
             let version: i64 = row.try_get(0)?;

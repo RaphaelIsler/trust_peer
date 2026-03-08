@@ -1,11 +1,16 @@
 use dioxus::prelude::*;
 
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-use crate::{LedgerNode, PeerConnection, PeerConnectionView, User, UserDatabase, WebRtcIds, WebRtcIdsInputView, WebRtcIdsShareView};
+use crate::peer_connection::{
+    Connection as PeerConnection, ConnectionView, WebRtcIds, WebRtcIdsInputView, WebRtcIdsShareView,
+};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-use chrono::NaiveDate;
+use crate::{LedgerNode, User, UserDatabase};
+
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 use crate::block_entry::{AppBlock, BlockView};
+#[cfg(any(feature = "desktop", feature = "mobile"))]
+use chrono::NaiveDate;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 use std::collections::HashMap;
 
@@ -17,7 +22,8 @@ pub fn UserManager() -> Element {
         let mut users = use_signal(|| Vec::<User>::new());
         let mut show_form = use_signal(|| false);
         let mut error_message = use_signal(|| None::<String>);
-        let mut user_services = use_signal(|| HashMap::<String, crate::ledger_node::ui::LedgerNode>::new());
+        let mut user_services =
+            use_signal(|| HashMap::<String, crate::ledger_node::ui::LedgerNode>::new());
         // Lade Benutzer beim ersten Render
         use_effect(move || {
             spawn(async move {
@@ -26,16 +32,17 @@ pub fn UserManager() -> Element {
                         Ok(user_list) => {
                             let mut services_map = user_services.write();
                             for user in &user_list {
-                                let service = match LedgerNode::start(base_path.clone(), &user.id).await {
-                                    Ok(service) => service,
-                                    Err(e) => {
-                                        error_message.set(Some(format!(
-                                            "Fehler beim Starten des Service für {}: {e}",
-                                            user.full_name()
-                                        )));
-                                        continue;
-                                    }
-                                };
+                                let service =
+                                    match LedgerNode::start(base_path.clone(), &user.id).await {
+                                        Ok(service) => service,
+                                        Err(e) => {
+                                            error_message.set(Some(format!(
+                                                "Fehler beim Starten des Service für {}: {e}",
+                                                user.full_name()
+                                            )));
+                                            continue;
+                                        }
+                                    };
                                 services_map.insert(user.id.inner().to_string(), service);
                             }
                             users.set(user_list);
@@ -119,7 +126,10 @@ pub fn UserManager() -> Element {
 
 /// Form for creating a new user
 #[component]
-fn CreateUserForm(on_submit: EventHandler<(User, crate::ledger_node::ui::LedgerNode)>, on_error: EventHandler<String>) -> Element {
+fn CreateUserForm(
+    on_submit: EventHandler<(User, crate::ledger_node::ui::LedgerNode)>,
+    on_error: EventHandler<String>,
+) -> Element {
     let mut first_name = use_signal(|| String::new());
     let mut last_name = use_signal(|| String::new());
     let mut middle_name = use_signal(|| String::new());
@@ -253,7 +263,10 @@ fn UserCard(user: User, service: LedgerNode) -> Element {
         let service = service.clone();
         spawn(async move {
             match service.get_private_and_public().await {
-                Ok((p_id, pub_id)) => {private_id.set(Some(p_id)); public_id.set(Some(pub_id));},
+                Ok((p_id, pub_id)) => {
+                    private_id.set(Some(p_id));
+                    public_id.set(Some(pub_id));
+                }
                 Err(e) => chain_error.set(Some(format!("Failed to load chain IDs: {e}"))),
             }
         });
@@ -290,7 +303,7 @@ fn UserCard(user: User, service: LedgerNode) -> Element {
         None
     };
 
-    let chain_view = match active_chain(){
+    let chain_view = match active_chain() {
         Some(blocks) => Some(rsx! {
             div { class: "blockchain",
                 if blocks.is_empty() {
@@ -301,10 +314,8 @@ fn UserCard(user: User, service: LedgerNode) -> Element {
                 }
             }
         }),
-        None => None
+        None => None,
     };
-
-
 
     rsx! {
         div {
@@ -485,7 +496,7 @@ fn UserCard(user: User, service: LedgerNode) -> Element {
                             }
                         } else {
                             for connection in peer_connections().iter() {
-                                PeerConnectionView {
+                                ConnectionView {
                                     connection: connection.clone(),
                                     on_save_name: {
                                         let service = service.clone();
@@ -555,7 +566,9 @@ async fn create_user(
 
     let db_path = get_db_path()?;
     let db = UserDatabase::open(&db_path).await?;
-    Ok(db.create_user(first_name, last_name, middle_name, date_of_birth).await?)
+    Ok(db
+        .create_user(first_name, last_name, middle_name, date_of_birth)
+        .await?)
 }
 
 #[cfg(any(feature = "desktop", feature = "mobile"))]
@@ -570,16 +583,20 @@ fn select_chain(
     if selection == selected_chain() {
         return;
     }
-    if let Some(selection) = selection{
-
+    if let Some(selection) = selection {
         chain_loading.set(true);
         chain_error.set(None);
 
         spawn(async move {
-            chain.set(Some(service.get_blocks(selection, 100, None).await.unwrap_or_else(|e| {
-                chain_error.set(Some(format!("Failed to load blocks: {e}")));
-                Vec::new()
-            })));
+            chain.set(Some(
+                service
+                    .get_blocks(selection, 100, None)
+                    .await
+                    .unwrap_or_else(|e| {
+                        chain_error.set(Some(format!("Failed to load blocks: {e}")));
+                        Vec::new()
+                    }),
+            ));
             selected_chain.set(Some(selection));
             chain_loading.set(false);
         });

@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use app::{Echo, Hero};
+use dioxus::prelude::*;
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 const MAIN_CSS: Asset = asset!("/assets/main.css");

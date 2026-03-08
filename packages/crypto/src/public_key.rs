@@ -1,6 +1,6 @@
-use sqlx::{Decode, Encode, Sqlite, Type};
 use sqlx::encode::IsNull;
 use sqlx::sqlite::{SqliteArgumentValue, SqliteTypeInfo, SqliteValueRef};
+use sqlx::{Decode, Encode, Sqlite, Type};
 use std::borrow::Cow;
 use std::error::Error as StdError;
 
@@ -22,16 +22,20 @@ impl PublicKey {
     /// Verify a signature
     #[cfg(feature = "ed25519")]
     pub fn verify(&self, data: &[u8], signature: &crate::Signature) -> Result<(), anyhow::Error> {
-        use ed25519_dalek::{Verifier, VerifyingKey, Signature as DalekSignature};
+        use ed25519_dalek::{Signature as DalekSignature, Verifier, VerifyingKey};
 
         let verifying_key = VerifyingKey::from_bytes(
-            self.0.as_slice().try_into()
-                .map_err(|_| anyhow::anyhow!("Invalid public key length"))?
+            self.0
+                .as_slice()
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("Invalid public key length"))?,
         )?;
 
         let sig = DalekSignature::from_bytes(
-            signature.as_bytes().try_into()
-                .map_err(|_| anyhow::anyhow!("Invalid signature length"))?
+            signature
+                .as_bytes()
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("Invalid signature length"))?,
         );
 
         verifying_key.verify(data, &sig)?;
@@ -63,10 +67,11 @@ impl<'r> Decode<'r, Sqlite> for PublicKey {
 }
 
 impl<'q> Encode<'q, Sqlite> for PublicKey {
-    fn encode_by_ref(&self, args: &mut Vec<SqliteArgumentValue<'q>>) -> Result<IsNull, Box<dyn StdError + Send + Sync>> {
-        args.push(SqliteArgumentValue::Blob(Cow::Owned(
-            self.0.to_vec(),
-        )));
+    fn encode_by_ref(
+        &self,
+        args: &mut Vec<SqliteArgumentValue<'q>>,
+    ) -> Result<IsNull, Box<dyn StdError + Send + Sync>> {
+        args.push(SqliteArgumentValue::Blob(Cow::Owned(self.0.to_vec())));
         Ok(IsNull::No)
     }
 }

@@ -35,4 +35,10 @@ pub enum Error {
     Unknown(String),
 }
 
+impl From<anyhow::Error> for Error {
+    fn from(err: anyhow::Error) -> Self {
+        Error::Unknown(err.to_string())
+    }
+}
+
 pub type Result<T> = std::result::Result<T, Error>;

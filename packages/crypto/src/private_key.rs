@@ -1,10 +1,10 @@
 #[cfg(feature = "ed25519")]
-use ed25519_dalek::{SigningKey, Signer, SECRET_KEY_LENGTH};
-use rand::RngCore;
+use ed25519_dalek::{Signer, SigningKey, SECRET_KEY_LENGTH};
 use rand::rngs::OsRng;
-use sqlx::{Decode, Encode, Sqlite, Type};
+use rand::RngCore;
 use sqlx::encode::IsNull;
 use sqlx::sqlite::{SqliteArgumentValue, SqliteTypeInfo, SqliteValueRef};
+use sqlx::{Decode, Encode, Sqlite, Type};
 use std::borrow::Cow;
 use std::error::Error as StdError;
 
@@ -36,8 +36,10 @@ impl PrivateKey {
     #[cfg(feature = "ed25519")]
     pub fn public_key(&self) -> crate::PublicKey {
         let signing_key = SigningKey::from_bytes(
-            self.0.as_slice().try_into()
-                .expect("Invalid private key length")
+            self.0
+                .as_slice()
+                .try_into()
+                .expect("Invalid private key length"),
         );
         let verifying_key = signing_key.verifying_key();
         crate::PublicKey(verifying_key.to_bytes().to_vec())
@@ -47,8 +49,10 @@ impl PrivateKey {
     #[cfg(feature = "ed25519")]
     pub fn sign(&self, data: &[u8]) -> Result<crate::Signature, anyhow::Error> {
         let signing_key = SigningKey::from_bytes(
-            self.0.as_slice().try_into()
-                .map_err(|_| anyhow::anyhow!("Invalid private key length"))?
+            self.0
+                .as_slice()
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("Invalid private key length"))?,
         );
         let sig = signing_key.sign(data);
         Ok(crate::Signature(sig.to_bytes().to_vec()))
@@ -79,10 +83,11 @@ impl<'r> Decode<'r, Sqlite> for PrivateKey {
 }
 
 impl<'q> Encode<'q, Sqlite> for PrivateKey {
-    fn encode_by_ref(&self, args: &mut Vec<SqliteArgumentValue<'q>>) -> Result<IsNull, Box<dyn StdError + Send + Sync>> {
-        args.push(SqliteArgumentValue::Blob(Cow::Owned(
-            self.0.to_vec(),
-        )));
+    fn encode_by_ref(
+        &self,
+        args: &mut Vec<SqliteArgumentValue<'q>>,
+    ) -> Result<IsNull, Box<dyn StdError + Send + Sync>> {
+        args.push(SqliteArgumentValue::Blob(Cow::Owned(self.0.to_vec())));
         Ok(IsNull::No)
     }
 }

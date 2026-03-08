@@ -33,12 +33,16 @@ impl Value {
     pub fn from_db_parts(value: String, value_type: String) -> Result<Self> {
         match value_type.as_str() {
             "string" => Ok(Value::String(value)),
-            "number" => Ok(Value::Number(value.parse::<f64>().map_err(|err| {
-                anyhow!("Invalid number value '{}': {}", value, err)
-            })?)),
-            "boolean" => Ok(Value::Boolean(value.parse::<bool>().map_err(|err| {
-                anyhow!("Invalid boolean value '{}': {}", value, err)
-            })?)),
+            "number" => {
+                Ok(Value::Number(value.parse::<f64>().map_err(|err| {
+                    anyhow!("Invalid number value '{}': {}", value, err)
+                })?))
+            }
+            "boolean" => {
+                Ok(Value::Boolean(value.parse::<bool>().map_err(|err| {
+                    anyhow!("Invalid boolean value '{}': {}", value, err)
+                })?))
+            }
             "object" => Ok(Value::Object(value)),
             other => Err(anyhow!("Unknown value type '{}'.", other)),
         }
@@ -224,12 +228,10 @@ impl db::DbEntity for KeyValue {
 
     async fn read(conn: &SqlitePool, id: &Self::Id) -> Result<Option<Self>> {
         let id = id.clone();
-        let row = sqlx::query(
-            "SELECT key, value, value_type FROM user_key_values WHERE key = ?1",
-        )
-        .bind(&id)
-        .fetch_optional(conn)
-        .await?;
+        let row = sqlx::query("SELECT key, value, value_type FROM user_key_values WHERE key = ?1")
+            .bind(&id)
+            .fetch_optional(conn)
+            .await?;
 
         if let Some(row) = row {
             let value: String = row.try_get(1)?;

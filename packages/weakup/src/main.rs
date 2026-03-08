@@ -87,7 +87,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let addr = state.config.socket_addr();
-    let app = Router::new().route("/wake", post(wake_handler)).with_state(state);
+    let app = Router::new()
+        .route("/wake", post(wake_handler))
+        .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     println!("WeakUp server listening on {addr}");
@@ -209,8 +211,8 @@ async fn send_fcm(state: &AppState, request: &WakeupRequest) -> Result<String, S
     }
 
     if let Some(data) = request.data.as_ref().and_then(as_string_map) {
-        message["message"]["data"] = serde_json::to_value(data)
-            .map_err(|err| format!("FCM data serialize error: {err}"))?;
+        message["message"]["data"] =
+            serde_json::to_value(data).map_err(|err| format!("FCM data serialize error: {err}"))?;
     }
 
     let url = format!(
@@ -270,9 +272,15 @@ async fn send_apns(state: &AppState, request: &WakeupRequest) -> Result<String, 
     let priority = if push_type == "alert" { "10" } else { "5" };
 
     let url = if auth.use_sandbox {
-        format!("https://api.sandbox.push.apple.com/3/device/{}", request.device_token)
+        format!(
+            "https://api.sandbox.push.apple.com/3/device/{}",
+            request.device_token
+        )
     } else {
-        format!("https://api.push.apple.com/3/device/{}", request.device_token)
+        format!(
+            "https://api.push.apple.com/3/device/{}",
+            request.device_token
+        )
     };
 
     let response = state

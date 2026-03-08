@@ -4,14 +4,14 @@
 ## Project Overview
 Blockchain based app for desktop, android or iphone
 Stack: Rust, Dioxus, Sqlite, WebRTC
+Each instance has a private chain and a dedicated public chain.
+Public chain is intended to be published externally as integrity proof for the private chain.
+Private chain is shared only with connected peers for transaction oversight and trust decisions.
 
 ## Architecture
 - Clean architecture
 - Services contain business logic
 - `#[derive(helper::ServiceWrapper)]` on a message enum generates async wrapper methods on the service type in snake_case (for example `StartNewConnection` -> `start_new_connection`).
-- Each instance has a private chain and a dedicated public chain.
-- Public chain is intended to be published externally as integrity proof for the private chain.
-- Private chain is shared only with connected peers for transaction oversight and trust decisions.
 
 ## Code Style
  - Write code and comments in english

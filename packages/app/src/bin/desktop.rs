@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use app::{P2PTestComponent, UserManager};
+use dioxus::prelude::*;
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 
@@ -9,10 +9,8 @@ fn main() {
         .filter_level(log::LevelFilter::Debug)
         .init();
 
-
     dioxus::launch(App);
 }
-
 
 #[component]
 #[allow(non_snake_case)]

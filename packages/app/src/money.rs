@@ -1,19 +1,18 @@
-use serde::{Serialize, Deserialize};
-use core_types::{Q32_32, Timestamp};
+use core_types::{Timestamp, Q32_32};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 use dioxus::prelude::*;
+use serde::{Deserialize, Serialize};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 use tokio::time::{sleep, Duration};
-
 
 ///80% after 3 months
 const DECAY_RATE_Q32_32: Q32_32 = Q32_32::from_f64(0.00075);
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Money{
+pub struct Money {
     amount: Q32_32,
     timestamp: Timestamp,
-    decay_rate: u32, // the _32 of Q32_32
+    decay_rate: u32,  // the _32 of Q32_32
     income_rate: u32, // the 32_ of Q32_32 for income
 }
 
@@ -23,17 +22,16 @@ impl Default for Money {
             amount: Q32_32::from_u64(0), // Default initial amount
             timestamp: Timestamp::now(), // Default to current time
             decay_rate: DECAY_RATE_Q32_32.get_decimal_part(), // Default decay rate
-            income_rate: 200, // No linear income by default
+            income_rate: 200,            // No linear income by default
         }
     }
 }
-
 
 /// Calculate wealth using Q32.32 fixed-point (u64) and no_std-friendly math.
 /// - time is in seconds (Q32.32)
 /// - linear_income_rate is income per second (Q32.32)
 /// - interest_rate is continuous rate per second (Q32.32)
-impl Money{
+impl Money {
     pub fn timestamp(self) -> Timestamp {
         self.timestamp
     }
@@ -44,7 +42,6 @@ impl Money{
     }
 
     pub fn on_time(self, target_time: Timestamp) -> Money {
-
         if target_time <= self.timestamp {
             return self.clone();
         }
@@ -55,7 +52,7 @@ impl Money{
 
         if decay_rate.raw() == 0 {
             let linear_income = linear_income_rate * delta_t;
-            return Self{
+            return Self {
                 amount: self.amount.saturating_add(linear_income),
                 timestamp: target_time,
                 decay_rate: self.decay_rate,
@@ -71,7 +68,7 @@ impl Money{
         let exp_minus_one = exp_term.saturating_sub(Q32_32::ONE);
         let part2 = linear_over_r * exp_minus_one;
 
-        Self{
+        Self {
             amount: part1.saturating_add(part2),
             timestamp: target_time,
             decay_rate: self.decay_rate,
@@ -80,13 +77,12 @@ impl Money{
     }
 }
 
-
 impl core::ops::Add for Money {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
         if self.timestamp == rhs.timestamp {
-            Self{
+            Self {
                 amount: self.amount.saturating_add(rhs.amount),
                 timestamp: self.timestamp,
                 decay_rate: self.decay_rate,
@@ -94,15 +90,15 @@ impl core::ops::Add for Money {
             }
         } else if self.timestamp > rhs.timestamp {
             let same_time_rhs = rhs.on_time(self.timestamp);
-            Self{
+            Self {
                 amount: self.amount.saturating_add(same_time_rhs.amount),
                 timestamp: self.timestamp,
                 decay_rate: self.decay_rate,
                 income_rate: self.income_rate + same_time_rhs.income_rate,
             }
-        } else{
+        } else {
             let same_time_self = self.on_time(rhs.timestamp);
-            Self{
+            Self {
                 amount: same_time_self.amount.saturating_add(rhs.amount),
                 timestamp: rhs.timestamp,
                 decay_rate: self.decay_rate,
@@ -189,5 +185,4 @@ mod tests {
         let expected = Q32_32::from_u64(16).raw();
         assert_eq!(result, expected);
     }
-
 }

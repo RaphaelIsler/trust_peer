@@ -1,0 +1,6 @@
+[
+  {
+    "command": "cargo build -p app --features desktop --bin desktop",
+    "label": "build desktop",
+  },
+]

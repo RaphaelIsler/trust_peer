@@ -1,0 +1,16 @@
+{
+  "lsp": {
+    "rust-analyzer": {
+      "initialization_options": {
+        "cargo": {
+          "features": ["desktop"],
+          "target": null
+        },
+        "check": {
+          "command": "check",
+          "extraArgs": ["--features", "desktop", "-p", "app", "--bin", "desktop"]
+        }
+      }
+    }
+  }
+}

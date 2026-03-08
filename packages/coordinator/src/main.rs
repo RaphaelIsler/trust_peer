@@ -1,8 +1,8 @@
 use api::{FromCoordinator, ServerConfig, ToCoordinator};
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpListener;
-use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::accept_async;
+use tokio_tungstenite::tungstenite::Message;
 
 fn config_path_from_args() -> Option<std::path::PathBuf> {
     let mut args = std::env::args().skip(1);

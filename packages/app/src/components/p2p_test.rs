@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
+use log::{error, info};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use log::{error, info};
 use uuid::Uuid;
 
 #[cfg(any(feature = "desktop", feature = "mobile"))]
@@ -43,8 +43,7 @@ pub fn P2PTestComponent() -> Element {
         let mut signaling_server = use_signal(|| String::from("ws://127.0.0.1:3000"));
 
         // Shared P2P instance
-        let mut p2p_instance: Signal<Option<Arc<Mutex<P2pWebRtc>>>> =
-            use_signal(|| None);
+        let mut p2p_instance: Signal<Option<Arc<Mutex<P2pWebRtc>>>> = use_signal(|| None);
 
         // Handle connection
         let handle_connect = move |_: dioxus::prelude::Event<dioxus::prelude::MouseData>| {
@@ -83,12 +82,9 @@ pub fn P2PTestComponent() -> Element {
                 info!("[P2P] Attempting connection to room: {}", room);
 
                 // Create config
-                let config = P2pConfig::new(
-                    signaling_server().clone(),
-                    room_id,
-                )
-                .with_timeout(30)
-                .with_peer_id(peer_id);
+                let config = P2pConfig::new(signaling_server().clone(), room_id)
+                    .with_timeout(30)
+                    .with_peer_id(peer_id);
 
                 // Create P2P handler
                 let mut p2p = P2pWebRtc::new(config);
@@ -100,8 +96,7 @@ pub fn P2PTestComponent() -> Element {
                         connection_status.set(ConnectionStatus::Connected);
                         messages.write().push(format!(
                             "✓ Connected to room: {} (Peer: {})",
-                            room,
-                            peer_id_text
+                            room, peer_id_text
                         ));
 
                         // Store P2P instance
@@ -119,10 +114,7 @@ pub fn P2PTestComponent() -> Element {
                                         Ok(Some(data)) => {
                                             if let Ok(text) = String::from_utf8(data) {
                                                 info!("[P2P] Received message: {}", text);
-                                                messages.write().push(format!(
-                                                    "← {}",
-                                                    text
-                                                ));
+                                                messages.write().push(format!("← {}", text));
                                             }
                                         }
                                         Ok(None) => {

@@ -83,8 +83,7 @@ pub fn open(private_key_bytes: &[u8], sealed: &[u8]) -> Result<Vec<u8>> {
 fn derive_key(shared_secret: &[u8], ephemeral_public: &[u8]) -> Result<[u8; 32]> {
     let hkdf = Hkdf::<Sha256>::new(Some(ephemeral_public), shared_secret);
     let mut key = [0u8; 32];
-    hkdf
-        .expand(b"crypto-sealed-box", &mut key)
+    hkdf.expand(b"crypto-sealed-box", &mut key)
         .map_err(|_| anyhow::anyhow!("hkdf expansion failed"))?;
     Ok(key)
 }

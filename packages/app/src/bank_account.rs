@@ -1,8 +1,8 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::peer_connection;
 use crate::money::MoneyViewMode;
+use crate::peer_connection;
 use crate::{Money, MoneyView};
 
 pub type BankAccountId = helper::UId<BankAccount>;
@@ -16,7 +16,11 @@ pub struct BankAccount {
 }
 
 impl BankAccount {
-    pub fn new(peer_connection_id: peer_connection::Id, own_money: Money, peer_connection_money: Money) -> Self {
+    pub fn new(
+        peer_connection_id: peer_connection::Id,
+        own_money: Money,
+        peer_connection_money: Money,
+    ) -> Self {
         Self {
             id: BankAccountId::new(),
             peer_connection_id,

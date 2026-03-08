@@ -1,8 +1,8 @@
+use crate::{LedgerNode, Result, User, UserError, UserId};
 use chrono::NaiveDate;
-use sqlx::{Row, SqlitePool};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::{Row, SqlitePool};
 use std::path::{Path, PathBuf};
-use crate::{LedgerNode, User, UserId, Result, UserError};
 
 /// Central management of all users
 pub struct UserDatabase {
@@ -17,11 +17,11 @@ impl UserDatabase {
         let needs_init = !db_path.exists();
 
         if let Some(parent) = db_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| UserError::InvalidData(e.to_string()))?;
+            std::fs::create_dir_all(parent).map_err(|e| UserError::InvalidData(e.to_string()))?;
         }
 
-        let base_data_path = db_path.parent()
+        let base_data_path = db_path
+            .parent()
             .ok_or_else(|| UserError::InvalidData("Invalid database path".to_string()))?
             .to_path_buf();
 
@@ -34,7 +34,11 @@ impl UserDatabase {
             .connect_with(options)
             .await?;
 
-        let mut db = Self { pool, db_path, base_data_path };
+        let mut db = Self {
+            pool,
+            db_path,
+            base_data_path,
+        };
 
         if needs_init {
             db.initialize().await?;
@@ -102,8 +106,6 @@ impl UserDatabase {
         .execute(&self.pool)
         .await?;
 
-
-
         Ok((user, user_service))
     }
 
@@ -169,7 +171,12 @@ impl UserDatabase {
         Ok(())
     }
 
-    pub async fn update_user(&self, id: &UserId, first_name: String, last_name: String) -> Result<User> {
+    pub async fn update_user(
+        &self,
+        id: &UserId,
+        first_name: String,
+        last_name: String,
+    ) -> Result<User> {
         let result = sqlx::query(
             "UPDATE users SET first_name = ?2, last_name = ?3
              WHERE id = ?1",

@@ -4,8 +4,8 @@ use uuid::Uuid;
 
 #[cfg(feature = "ed25519")]
 use ed25519_dalek::{SigningKey, SECRET_KEY_LENGTH};
-use rand::RngCore;
 use rand::rngs::OsRng;
+use rand::RngCore;
 
 use crate::{PrivateKey, PublicKey};
 
@@ -32,15 +32,13 @@ impl KeyMeta {
         let public_key_clone = public_key.clone();
         let private_key_clone = private_key.clone();
 
-        sqlx::query(
-            "INSERT INTO keys (id, alg, public_key, private_key) VALUES (?1, ?2, ?3, ?4)",
-        )
-        .bind(key_id.to_string())
-        .bind("ed25519")
-        .bind(public_key_clone)
-        .bind(private_key_clone)
-        .execute(conn)
-        .await?;
+        sqlx::query("INSERT INTO keys (id, alg, public_key, private_key) VALUES (?1, ?2, ?3, ?4)")
+            .bind(key_id.to_string())
+            .bind("ed25519")
+            .bind(public_key_clone)
+            .bind(private_key_clone)
+            .execute(conn)
+            .await?;
 
         Ok(KeyMeta {
             id: key_id,

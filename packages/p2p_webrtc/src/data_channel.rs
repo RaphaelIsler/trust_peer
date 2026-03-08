@@ -2,8 +2,10 @@
 //!
 //! Manages WebRTC DataChannels for reliable, ordered message delivery.
 
-use crate::error::{Error, Result};
-use crate::{PeerId};
+use crate::error::Error;
+use anyhow::Result;
+
+use crate::PeerId;
 use log::{debug, info};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
@@ -68,13 +70,13 @@ impl DataChannel {
             }));
 
             // Wait for the channel to be received (with timeout)
-            let data_channel = tokio::time::timeout(
-                std::time::Duration::from_secs(10),
-                channel_rx.recv(),
-            )
-            .await
-            .map_err(|_| Error::DataChannel("Timeout waiting for data channel".to_string()))?
-            .ok_or_else(|| Error::DataChannel("Data channel not received".to_string()))?;
+            let data_channel =
+                tokio::time::timeout(std::time::Duration::from_secs(10), channel_rx.recv())
+                    .await
+                    .map_err(|_| {
+                        Error::DataChannel("Timeout waiting for data channel".to_string())
+                    })?
+                    .ok_or_else(|| Error::DataChannel("Data channel not received".to_string()))?;
 
             Self::setup_channel_handlers(Arc::clone(&data_channel)).await?;
 
@@ -88,9 +90,7 @@ impl DataChannel {
     }
 
     /// Setup handlers for data channel events
-    async fn setup_channel_handlers(
-        channel: Arc<RTCDataChannel>,
-    ) -> Result<()> {
+    async fn setup_channel_handlers(channel: Arc<RTCDataChannel>) -> Result<()> {
         // On message handler
         channel.on_message(Box::new(move |msg: DataChannelMessage| {
             debug!("Received data: {} bytes", msg.data.len());

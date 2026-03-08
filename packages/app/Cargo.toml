@@ -9,8 +9,10 @@ core_types = { path = "../core_types" }
 crypto = { path = "../crypto", optional = true }
 blockchain = { path = "../blockchain", optional = true }
 db = { path = "../db", optional = true }
+api = { path = "../api" }
 p2p_webrtc = { path = "../p2p_webrtc", optional = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }

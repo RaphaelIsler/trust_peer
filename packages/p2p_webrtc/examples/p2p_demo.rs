@@ -67,10 +67,7 @@ async fn main() -> anyhow::Result<()> {
             let start = std::time::Instant::now();
             while start.elapsed() < Duration::from_secs(10) {
                 if let Ok(Some(data)) = p2p.try_recv().await {
-                    println!(
-                        "✓ Received message: {}",
-                        String::from_utf8_lossy(&data)
-                    );
+                    println!("✓ Received message: {}", String::from_utf8_lossy(&data));
                 }
                 sleep(Duration::from_millis(100)).await;
             }
@@ -82,7 +79,10 @@ async fn main() -> anyhow::Result<()> {
         }
         Err(e) => {
             eprintln!("✗ Connection failed: {}", e);
-            eprintln!("Make sure the signaling server is running at: {}", signaling_server);
+            eprintln!(
+                "Make sure the signaling server is running at: {}",
+                signaling_server
+            );
         }
     }
 

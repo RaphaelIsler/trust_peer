@@ -1,8 +1,8 @@
+use crate::money::{Money, MoneyView, MoneyViewMode};
 use anyhow::Result;
 use blockchain::{Block, BlockHeaderView, BlockLink, BlockLinkView};
-use crypto::{Salt, Signature};
-use crate::money::{Money, MoneyView, MoneyViewMode};
 use core_types::TimestampView;
+use crypto::{Salt, Signature};
 use dioxus::prelude::*;
 
 pub type AppBlock = Block<BlockEntry>;
@@ -18,9 +18,9 @@ pub enum BlockEntry {
         data: Vec<u8>,
     },
     Link(BlockLink),
-    CurrentAmount{
+    CurrentAmount {
         money: Money,
-    }
+    },
 }
 
 impl BlockEntry {

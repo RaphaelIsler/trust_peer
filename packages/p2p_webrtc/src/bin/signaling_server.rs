@@ -12,14 +12,13 @@
 use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
 use log::{debug, error, info};
+use p2p_webrtc::signaling::SignalingMessage;
+use p2p_webrtc::{PeerId, RoomId};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, RwLock};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
-use p2p_webrtc::{PeerId, RoomId};
-use p2p_webrtc::signaling::SignalingMessage;
-
 
 type PeerMap = Arc<RwLock<HashMap<String, mpsc::UnboundedSender<SignalingMessage>>>>;
 type RoomMap = Arc<RwLock<HashMap<String, PeerMap>>>;
@@ -109,12 +108,19 @@ async fn handle_client(stream: TcpStream, rooms: RoomMap) {
                                         let peers_guard = peers.read().await;
                                         for (other_id, other_tx) in peers_guard.iter() {
                                             if other_id != &peer_id.to_string() {
-                                                info!("Notifying peer {} of new peer {}", other_id, peer_id);
-                                                if let Ok(other_peer_id) = PeerId::parse_str(other_id) {
-                                                    let _ = other_tx.send(SignalingMessage::PeerJoined {
-                                                        peer_id,
-                                                        do_initiation: true,
-                                                    });
+                                                info!(
+                                                    "Notifying peer {} of new peer {}",
+                                                    other_id, peer_id
+                                                );
+                                                if let Ok(other_peer_id) =
+                                                    PeerId::parse_str(other_id)
+                                                {
+                                                    let _ = other_tx.send(
+                                                        SignalingMessage::PeerJoined {
+                                                            peer_id,
+                                                            do_initiation: true,
+                                                        },
+                                                    );
                                                     let _ = tx.send(SignalingMessage::PeerJoined {
                                                         peer_id: other_peer_id,
                                                         do_initiation: false,
@@ -133,19 +139,22 @@ async fn handle_client(stream: TcpStream, rooms: RoomMap) {
                                 SignalingMessage::Offer { to, .. } => {
                                     info!("Forwarding offer to {}", to);
                                     if let Some(room_id) = room_id {
-                                        forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                        forward_message(&rooms, &room_id, to, sig_msg.clone())
+                                            .await;
                                     }
                                 }
                                 SignalingMessage::Answer { to, .. } => {
                                     info!("Forwarding answer to {}", to);
                                     if let Some(room_id) = room_id {
-                                        forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                        forward_message(&rooms, &room_id, to, sig_msg.clone())
+                                            .await;
                                     }
                                 }
                                 SignalingMessage::IceCandidate { to, .. } => {
                                     debug!("Forwarding ICE candidate to {}", to);
                                     if let Some(room_id) = room_id {
-                                        forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                        forward_message(&rooms, &room_id, to, sig_msg.clone())
+                                            .await;
                                     }
                                 }
                                 _ => {}

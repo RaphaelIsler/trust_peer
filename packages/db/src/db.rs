@@ -1,8 +1,8 @@
-use anyhow::Result;
-use sqlx::SqlitePool;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use std::path::{Path, PathBuf};
 use crate::DbEntity;
+use anyhow::Result;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::SqlitePool;
+use std::path::{Path, PathBuf};
 
 /// Zentrale Datenbank-Struktur
 pub struct DB {
@@ -65,12 +65,11 @@ impl DB {
 
     /// Returns the current migration version for a table
     async fn get_migration_version(&self, table_name: &str) -> Result<u32> {
-        let version: Option<i64> = sqlx::query_scalar(
-            "SELECT version FROM schema_migrations WHERE table_name = ?",
-        )
-        .bind(table_name)
-        .fetch_optional(&self.connection)
-        .await?;
+        let version: Option<i64> =
+            sqlx::query_scalar("SELECT version FROM schema_migrations WHERE table_name = ?")
+                .bind(table_name)
+                .fetch_optional(&self.connection)
+                .await?;
 
         Ok(version.unwrap_or(0) as u32)
     }
@@ -99,11 +98,13 @@ impl DB {
         if current_version == 0 {
             // Table doesn't exist, create it
             T::create_table(&self.connection).await?;
-            self.set_migration_version(table_name, target_version).await?;
+            self.set_migration_version(table_name, target_version)
+                .await?;
         } else if current_version < target_version {
             // Migration erforderlich
             T::update_table(&self.connection, current_version, target_version).await?;
-            self.set_migration_version(table_name, target_version).await?;
+            self.set_migration_version(table_name, target_version)
+                .await?;
         }
         // current_version == target_version: nichts zu tun
 

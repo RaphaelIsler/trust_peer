@@ -62,8 +62,14 @@ pub struct PeerConnection {
 impl PeerConnection {
     /// Create a new WebRTC peer connection
     /// Returns (PeerConnection, ICE candidate receiver)
-    pub async fn new(is_initiator: bool, ice_config: IceServersConfig) -> Result<(Self, mpsc::UnboundedReceiver<Option<IceCandidate>>)> {
-        info!("Creating WebRTC peer connection (initiator: {})", is_initiator);
+    pub async fn new(
+        is_initiator: bool,
+        ice_config: IceServersConfig,
+    ) -> Result<(Self, mpsc::UnboundedReceiver<Option<IceCandidate>>)> {
+        info!(
+            "Creating WebRTC peer connection (initiator: {})",
+            is_initiator
+        );
 
         // Configure ICE servers
         let mut ice_servers = Vec::new();
@@ -145,19 +151,20 @@ impl PeerConnection {
             }));
         }
 
-        Ok((Self {
-            peer,
-            is_initiator,
-            ice_tx,
-        }, ice_rx))
+        Ok((
+            Self {
+                peer,
+                is_initiator,
+                ice_tx,
+            },
+            ice_rx,
+        ))
     }
 
     /// Create an SDP offer (initiator only)
     pub async fn create_offer(&self) -> Result<String> {
         if !self.is_initiator {
-            return Err(Error::WebRtc(
-                "Only initiator can create offer".to_string(),
-            ));
+            return Err(Error::WebRtc("Only initiator can create offer".to_string()));
         }
 
         debug!("Creating SDP offer");

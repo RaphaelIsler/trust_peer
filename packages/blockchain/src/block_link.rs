@@ -1,21 +1,24 @@
 pub type Id = helper::UId<BlockLink>;
-use rand::Rng;
-use super::{Block};
-use crypto::{Hash, Salt};
+use super::Block;
 use crate::block::hex_preview;
+use crypto::{Hash, Salt};
 use dioxus::prelude::*;
+use rand::Rng;
 use serde::de::DeserializeOwned;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-pub struct BlockLink{
+pub struct BlockLink {
     to: super::blockchain::Id,
     block: super::block::Id,
     salt: Salt,
-    hash: Hash
+    hash: Hash,
 }
 
-impl BlockLink{
-    pub fn from_block<T>(to_blockchain: &super::blockchain::Id, block: &Block<T>) -> anyhow::Result<Self>
+impl BlockLink {
+    pub fn from_block<T>(
+        to_blockchain: &super::blockchain::Id,
+        block: &Block<T>,
+    ) -> anyhow::Result<Self>
     where
         T: serde::Serialize + DeserializeOwned + Clone + PartialEq + Eq,
     {

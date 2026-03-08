@@ -1,5 +1,5 @@
-use rand::RngCore;
 use rand::rngs::OsRng;
+use rand::RngCore;
 
 #[derive(Clone, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Salt(pub [u8; 32]);

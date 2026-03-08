@@ -3,13 +3,13 @@
 //! A modern, async-first WebRTC library for mobile and desktop applications.
 //! Provides a simple API for establishing peer-to-peer connections via WebSocket signaling.
 
-pub mod error;
-pub mod signaling;
-pub mod peer;
-pub mod data_channel;
 pub mod api;
+pub mod data_channel;
+pub mod error;
+pub mod peer;
+pub mod signaling;
 
-pub use api::{P2pWebRtc, P2pConfig, PeerId, RoomId};
+pub use api::{P2pConfig, P2pWebRtc, PeerId, RoomId};
 pub use error::{Error, Result};
 pub use peer::IceCandidate;
 

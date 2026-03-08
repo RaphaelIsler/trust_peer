@@ -22,10 +22,7 @@ pub struct User {
 
 impl User {
     /// Creates a new user
-    pub fn new(
-        first_name: String,
-        last_name: String,
-    ) -> crate::Result<Self> {
+    pub fn new(first_name: String, last_name: String) -> crate::Result<Self> {
         let id = UserId::new();
 
         Ok(Self {
@@ -97,7 +94,11 @@ impl db::DbEntity for User {
         Ok(())
     }
 
-    async fn update_table(_conn: &SqlitePool, _from_version: u32, _to_version: u32) -> anyhow::Result<()> {
+    async fn update_table(
+        _conn: &SqlitePool,
+        _from_version: u32,
+        _to_version: u32,
+    ) -> anyhow::Result<()> {
         // Keine Migrationen erforderlich (noch)
         Ok(())
     }
@@ -134,8 +135,8 @@ impl db::DbEntity for User {
 
         if let Some(row) = row {
             let created_str: String = row.try_get(3)?;
-            let created_at = chrono::DateTime::parse_from_rfc3339(&created_str)?
-                .with_timezone(&chrono::Utc);
+            let created_at =
+                chrono::DateTime::parse_from_rfc3339(&created_str)?.with_timezone(&chrono::Utc);
 
             Ok(Some(User {
                 id: row.try_get(0)?,
@@ -168,8 +169,8 @@ impl db::DbEntity for User {
         let mut users = Vec::with_capacity(rows.len());
         for row in rows {
             let created_str: String = row.try_get(3)?;
-            let created_at = chrono::DateTime::parse_from_rfc3339(&created_str)?
-                .with_timezone(&chrono::Utc);
+            let created_at =
+                chrono::DateTime::parse_from_rfc3339(&created_str)?.with_timezone(&chrono::Utc);
 
             users.push(User {
                 id: row.try_get(0)?,

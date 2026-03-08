@@ -44,5 +44,4 @@ mod tests {
 
         assert_eq!(opened, plaintext);
     }
-
 }

@@ -6,20 +6,22 @@
 //! 3. Receive peer joined notifications
 //! 4. Exchange signaling messages
 
+use futures_util::{SinkExt, StreamExt};
 use p2p_webrtc::peer::IceServersConfig;
 use p2p_webrtc::signaling::{ConnectionMsg, SignalingClient, SignalingMessage};
 use p2p_webrtc::{PeerId, RoomId};
+use serde_json;
 use std::net::TcpListener;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener as TokioTcpListener;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
-use futures_util::{SinkExt, StreamExt};
 use uuid::Uuid;
-use serde_json;
 
-type PeerMap = Arc<tokio::sync::RwLock<std::collections::HashMap<String, mpsc::UnboundedSender<SignalingMessage>>>>;
+type PeerMap = Arc<
+    tokio::sync::RwLock<std::collections::HashMap<String, mpsc::UnboundedSender<SignalingMessage>>>,
+>;
 type RoomMap = Arc<tokio::sync::RwLock<std::collections::HashMap<String, PeerMap>>>;
 
 /// Start signaling server on a specific port
@@ -65,7 +67,9 @@ async fn handle_client(stream: tokio::net::TcpStream, rooms: RoomMap) {
                     while let Some(msg) = receiver.recv().await {
                         log::debug!("Sending message: {:?}", msg);
                         if let Ok(json) = serde_json::to_string(&msg) {
-                            let _ = sender.send(tokio_tungstenite::tungstenite::Message::Text(json)).await;
+                            let _ = sender
+                                .send(tokio_tungstenite::tungstenite::Message::Text(json))
+                                .await;
                         }
                     }
                 })
@@ -94,7 +98,11 @@ async fn handle_client(stream: tokio::net::TcpStream, rooms: RoomMap) {
                                     let mut rooms_guard = rooms.write().await;
                                     let peers = rooms_guard
                                         .entry(room_id.to_string())
-                                        .or_insert_with(|| Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())))
+                                        .or_insert_with(|| {
+                                            Arc::new(tokio::sync::RwLock::new(
+                                                std::collections::HashMap::new(),
+                                            ))
+                                        })
                                         .clone();
                                     drop(rooms_guard);
 
@@ -103,11 +111,16 @@ async fn handle_client(stream: tokio::net::TcpStream, rooms: RoomMap) {
                                         let peers_guard = peers.read().await;
                                         for (other_id, other_tx) in peers_guard.iter() {
                                             if other_id != &peer_id.to_string() {
-                                                log::info!("Notifying peer {} of new peer {}", other_id, peer_id);
-                                                let _ = other_tx.send(SignalingMessage::PeerJoined {
-                                                    peer_id,
-                                                    do_initiation: true,
-                                                });
+                                                log::info!(
+                                                    "Notifying peer {} of new peer {}",
+                                                    other_id,
+                                                    peer_id
+                                                );
+                                                let _ =
+                                                    other_tx.send(SignalingMessage::PeerJoined {
+                                                        peer_id,
+                                                        do_initiation: true,
+                                                    });
                                             }
                                         }
                                     }
@@ -119,7 +132,9 @@ async fn handle_client(stream: tokio::net::TcpStream, rooms: RoomMap) {
 
                                         for other_id in peers_guard.keys() {
                                             if other_id != &peer_id.to_string() {
-                                                if let Ok(other_peer_id) = PeerId::parse_str(other_id) {
+                                                if let Ok(other_peer_id) =
+                                                    PeerId::parse_str(other_id)
+                                                {
                                                     let _ = tx.send(SignalingMessage::PeerJoined {
                                                         peer_id: other_peer_id,
                                                         do_initiation: false,
@@ -132,19 +147,22 @@ async fn handle_client(stream: tokio::net::TcpStream, rooms: RoomMap) {
                                 SignalingMessage::Offer { to, .. } => {
                                     log::info!("Forwarding offer to {}", to);
                                     if let Some(room_id) = room_id {
-                                        forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                        forward_message(&rooms, &room_id, to, sig_msg.clone())
+                                            .await;
                                     }
                                 }
                                 SignalingMessage::Answer { to, .. } => {
                                     log::info!("Forwarding answer to {}", to);
                                     if let Some(room_id) = room_id {
-                                        forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                        forward_message(&rooms, &room_id, to, sig_msg.clone())
+                                            .await;
                                     }
                                 }
                                 SignalingMessage::IceCandidate { to, .. } => {
                                     log::debug!("Forwarding ICE candidate to {}", to);
                                     if let Some(room_id) = room_id {
-                                        forward_message(&rooms, &room_id, to, sig_msg.clone()).await;
+                                        forward_message(&rooms, &room_id, to, sig_msg.clone())
+                                            .await;
                                     }
                                 }
                                 _ => {}
@@ -172,9 +190,7 @@ async fn handle_client(stream: tokio::net::TcpStream, rooms: RoomMap) {
                     peers_guard.remove(&peer_id.to_string());
 
                     for (_, other_tx) in peers_guard.iter() {
-                        let _ = other_tx.send(SignalingMessage::PeerLeft {
-                            peer_id,
-                        });
+                        let _ = other_tx.send(SignalingMessage::PeerLeft { peer_id });
                     }
                 }
             }
@@ -258,7 +274,6 @@ async fn test_two_clients_connect_and_exchange_messages() {
             println!("✓ Client 1 successfully connected via client.connect()");
 
             let _ = SignalingClient::receive_loop(stream, connection_tx).await;
-
         })
     };
 
@@ -289,7 +304,6 @@ async fn test_two_clients_connect_and_exchange_messages() {
             println!("✓ Client 2 successfully connected via client.connect()");
 
             let _ = SignalingClient::receive_loop(stream, connection_tx).await;
-
         })
     };
 
@@ -417,11 +431,14 @@ async fn test_client_can_send_offer_and_answer() {
                 let _ = SignalingClient::receive_loop(stream, connection_tx).await;
             });
 
-            if let Err(e) = client.send_message(SignalingMessage::Offer {
-                from: peer_id,
-                to: answerer_id,
-                sdp: "test-sdp-offer".to_string(),
-            }).await {
+            if let Err(e) = client
+                .send_message(SignalingMessage::Offer {
+                    from: peer_id,
+                    to: answerer_id,
+                    sdp: "test-sdp-offer".to_string(),
+                })
+                .await
+            {
                 eprintln!("Error sending offer: {}", e);
                 return;
             }

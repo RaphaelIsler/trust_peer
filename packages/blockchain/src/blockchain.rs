@@ -1,9 +1,8 @@
-
 use super::Block;
-use db::DbEntity;
 use anyhow::Result;
 use chrono::Utc;
 use crypto::Hash;
+use db::DbEntity;
 use dioxus::prelude::*;
 use serde::de::DeserializeOwned;
 
@@ -21,8 +20,8 @@ impl<T> Blockchain<T>
 where
     T: serde::Serialize + DeserializeOwned + Clone + PartialEq + Eq,
 {
-    pub fn new() -> Self{
-        Self{
+    pub fn new() -> Self {
+        Self {
             id: Id::new(),
             blocks: vec![],
         }
@@ -101,9 +100,7 @@ where
                 data,
             })
         } else {
-            let prev = self
-                .blocks
-                .last().expect("checked blocks is not empty") ;
+            let prev = self.blocks.last().expect("checked blocks is not empty");
             Ok(Block {
                 version: prev.version(),
                 header: super::block::Header {
@@ -200,12 +197,11 @@ where
     }
 }
 
-
 impl<T> Blockchain<T>
 where
     T: serde::Serialize + DeserializeOwned + Clone + PartialEq + Eq,
 {
-    pub async fn from_db(database: &mut db::DB) -> Result<Self>{
+    pub async fn from_db(database: &mut db::DB) -> Result<Self> {
         let mut blockchain = Self::new();
         database.migrate_table::<Block<T>>().await?;
         let blocks = Block::<T>::list(database.connection()).await?;

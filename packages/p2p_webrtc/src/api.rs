@@ -4,9 +4,10 @@
 //! sending/receiving data, and managing the connection lifecycle.
 
 use crate::data_channel::DataChannel;
-use crate::error::{Error, Result};
+use crate::error::Error;
 use crate::peer::{IceServersConfig, PeerConnection, TurnServer};
 use crate::signaling::{SignalingClient, SignalingMessage};
+use anyhow::Result;
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -116,11 +117,11 @@ impl P2pWebRtc {
     }
 
     /// Connect to a peer in the room
-    pub async fn connect(&mut self) -> Result<()> {
+    pub async fn connect(&mut self) -> Result<DataChannel> {
         info!("Starting P2P connection for room: {}", self.config.room_id);
 
         // Create signaling client (local to connect)
-        let mut signaling = SignalingClient::new(
+        let signaling = SignalingClient::new(
             self.config.room_id.clone(),
             self.config.ice_config.clone(),
             self.peer_id.clone(),
@@ -128,19 +129,22 @@ impl P2pWebRtc {
         );
 
         // Establish connection and get data_channel arc and remote_peer_id
-  //      let rx = {
-    //        let (_, rx) = mpsc::unbounded_channel();
-    //        std::mem::replace(&mut self.signaling_rx, rx)
-     //   };
-        self.data_channel = Some(signaling
+        //      let rx = {
+        //        let (_, rx) = mpsc::unbounded_channel();
+        //        std::mem::replace(&mut self.signaling_rx, rx)
+        //   };
+        //
+        let data_channel = signaling
             .establish_connection(
                 &self.config.signaling_server,
-//                rx,
+                //                rx,
                 Duration::from_secs(self.config.connection_timeout),
             )
-            .await?);
-        return Ok(());
-/*
+            .await?;
+
+        self.data_channel = Some(data_channel.clone());
+        return Ok(data_channel);
+        /*
         self.data_channel = Some(data_channel.clone());
         self.shutdown_tx = Some(shutdown_tx);
 
@@ -175,7 +179,7 @@ impl P2pWebRtc {
         if let Some(dc) = &self.data_channel {
             dc.send(data).await
         } else {
-            Err(Error::NotConnected)
+            Err(Error::NotConnected.into())
         }
     }
 
@@ -184,18 +188,16 @@ impl P2pWebRtc {
         if let Some(dc) = &self.data_channel {
             Ok(dc.try_recv().await)
         } else {
-            Err(Error::NotConnected)
+            Err(Error::NotConnected.into())
         }
     }
 
     /// Receive data from the remote peer (blocking)
     pub async fn recv(&self) -> Result<Vec<u8>> {
         if let Some(dc) = &self.data_channel {
-            dc.recv()
-                .await
-                .ok_or(Error::NotConnected)
+            dc.recv().await.ok_or(Error::NotConnected.into())
         } else {
-            Err(Error::NotConnected)
+            Err(Error::NotConnected.into())
         }
     }
 

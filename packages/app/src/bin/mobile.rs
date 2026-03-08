@@ -1,14 +1,11 @@
+use app::UserManager;
 use dioxus::prelude::*;
-use app::{UserManager};
-
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 
 fn main() {
     dioxus::launch(App);
 }
-
-
 
 #[component]
 #[allow(non_snake_case)]
