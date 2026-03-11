@@ -15,7 +15,6 @@ pub struct Connection {
     pub config: Config,
     #[serde(skip)]
     pub handler: Option<Service>,
-    //    pub data_channel: Option<DataChannel>,
 }
 
 impl PartialEq for Connection {

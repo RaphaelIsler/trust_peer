@@ -1,5 +1,5 @@
 use anyhow::Result;
-use dioxus::html::s;
+use core_types::Timestamp;
 use p2p_webrtc::data_channel::DataChannel;
 use p2p_webrtc::{P2pConfig, P2pWebRtc};
 use std::time::Duration;
@@ -36,10 +36,14 @@ pub struct Service {
     tx: mpsc::Sender<ToConnection>,
 }
 
+
+
+
 pub struct Internal {
     id: Id,
     data_channel: DataChannel,
     to_ledger: crate::ledger_node::con::Service,
+    state: Option<super::State>,
 }
 
 impl PartialEq for Service {
@@ -87,6 +91,7 @@ impl Service {
                 id: id,
                 data_channel: data_channel,
                 to_ledger: to_ledger.clone(),
+                state: None,
             };
             internal.process(to_ledger, rx).await;
             Ok(())
@@ -121,7 +126,29 @@ impl Internal {
                 last_name,
                 middle_name,
                 birthday,
-            } => {}
+            } => {
+                if self.state.is_none() {
+                    self.state = Some(super::State {
+                        id: public,
+                        last_public_singleton_checked: None,
+                        last_validated_public_block_id: None,
+                        trust_state: super::TrustState::WaitForNameAccept,
+                        last_seen_at: Timestamp::now(),
+                        private_chain_id: private.clone(),
+                    });
+                    let _ = self
+                        .to_ledger
+                        .name_accept_required(
+                            public,
+                            private,
+                            &first_name,
+                            &last_name,
+                            middle_name,
+                            birthday,
+                        )
+                        .await;
+                }
+            }
         }
     }
 

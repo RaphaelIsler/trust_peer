@@ -43,6 +43,28 @@ pub mod ui {
         },
     }
 
+    /// Events pushed proactively from LedgerNode to the GUI.
+    #[derive(Clone, PartialEq)]
+    pub enum LedgerEvent {
+        /// A peer introduced itself and is waiting for the user to accept or reject.
+        WaitForNameAccept {
+            connection_id: blockchain::Id,
+            private_chain_id: blockchain::Id,
+            first_name: String,
+            last_name: String,
+            middle_name: Option<String>,
+            birthday: Option<chrono::NaiveDate>,
+        },
+        /// A peer connection was fully established and persisted.
+        ConnectionEstablished {
+            connection: peer_connection::Connection,
+        },
+        /// An active peer connection was lost (stopped or failed).
+        ConnectionLost {
+            id: blockchain::Id,
+        },
+    }
+
     #[derive(Clone)]
     pub struct Service {
         tx: tokio::sync::mpsc::Sender<Msg>,
@@ -65,23 +87,23 @@ pub mod ui {
             user: &User,
             middle_name: Option<String>,
             date_of_birth: NaiveDate,
-        ) -> Result<Self> {
-            let mut internal =
+        ) -> Result<(Self, mpsc::Receiver<LedgerEvent>)> {
+            let (mut internal, event_rx) =
                 Internal::create_new_instance(base_path, user, middle_name, date_of_birth).await?;
             let (tx, rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
                 internal.process(rx).await;
             });
-            Ok(Self { tx })
+            Ok((Self { tx }, event_rx))
         }
 
-        pub async fn start(base_path: impl AsRef<Path>, user_id: &UserId) -> Result<Self> {
-            let mut internal = Internal::open(base_path, user_id).await?;
+        pub async fn start(base_path: impl AsRef<Path>, user_id: &UserId) -> Result<(Self, mpsc::Receiver<LedgerEvent>)> {
+            let (mut internal, event_rx) = Internal::open(base_path, user_id).await?;
             let (tx, rx) = tokio::sync::mpsc::channel(32);
             tokio::spawn(async move {
                 internal.process(rx).await;
             });
-            Ok(Self { tx })
+            Ok((Self { tx }, event_rx))
         }
     }
 
@@ -103,8 +125,16 @@ pub mod con {
         },
         NewConnectionEstablished {
             orig: u8,
-            id: blockchain::blockchain::Id,
+            connection_id: blockchain::Id,
             web_rtc_ids: WebRtcIds,
+        },
+        NameAcceptRequired {
+            connection_id: blockchain::Id,
+            private_chain_id: blockchain::Id,
+            first_name: String,
+            last_name: String,
+            middle_name: Option<String>,
+            birthday: Option<chrono::NaiveDate>,
         },
     }
 
@@ -142,6 +172,7 @@ struct Internal {
     init_id: u8,
     connection_tx: con::Service,
     connection_events_rx: mpsc::Receiver<con::Msg>,
+    event_tx: mpsc::Sender<ui::LedgerEvent>,
     new_connection_web_rtc_ids: WebRtcIds,
 }
 
@@ -149,7 +180,7 @@ impl Internal {
     const CURRENT_AMOUNT_MAX_AGE_SECS: u64 = 24 * 60 * 60;
 
     /// Opens the ledger node with a message receiver (used for per-user workers)
-    pub async fn open(base_path: impl AsRef<Path>, user_id: &UserId) -> Result<Self> {
+    pub async fn open(base_path: impl AsRef<Path>, user_id: &UserId) -> Result<(Self, mpsc::Receiver<ui::LedgerEvent>)> {
         Self::open_internal(base_path, user_id).await
     }
 
@@ -159,10 +190,10 @@ impl Internal {
         user: &User,
         middle_name: Option<String>,
         date_of_birth: NaiveDate,
-    ) -> Result<Self> {
+    ) -> Result<(Self, mpsc::Receiver<ui::LedgerEvent>)> {
         let user_id = user.id.clone();
 
-        let mut ret = Self::open_internal(base_path, &user_id).await?;
+        let (mut ret, event_rx) = Self::open_internal(base_path, &user_id).await?;
 
         if let Some(middle_name) = middle_name {
             KeyValue::new_typed("user.middle_name".to_string(), middle_name)
@@ -191,10 +222,10 @@ impl Internal {
                 &ret.public_chain_db,
             )
             .await?;
-        Ok(ret)
+        Ok((ret, event_rx))
     }
 
-    async fn open_internal<P: AsRef<Path>>(base_path: P, user_id: &UserId) -> Result<Self> {
+    async fn open_internal<P: AsRef<Path>>(base_path: P, user_id: &UserId) -> Result<(Self, mpsc::Receiver<ui::LedgerEvent>)> {
         let base_path = base_path.as_ref();
         let user_dir = base_path.join(user_id.inner().to_string());
 
@@ -217,6 +248,7 @@ impl Internal {
         let user_connections = PeerConnection::list(key_db.connection()).await?;
         let new_connection_web_rtc_ids = WebRtcIds::new();
         let (connection_events_tx, connection_events_rx) = mpsc::channel(128);
+        let (event_tx, event_rx) = mpsc::channel(64);
 
         let mut ret = Self {
             private_chain_db,
@@ -229,12 +261,13 @@ impl Internal {
             connection_tx: con::Service::new(connection_events_tx),
             init_id: 0,
             connection_events_rx,
+            event_tx,
             new_connection_web_rtc_ids,
         };
 
         ret.ensure_recent_current_amount_snapshot().await?;
 
-        Ok(ret)
+        Ok((ret, event_rx))
     }
 
     /// Initializes the private database (contains user info, keys, blockchains)
@@ -249,6 +282,7 @@ impl Internal {
         private_db.migrate_table::<crypto::KeyMeta>().await?;
         private_db.migrate_table::<KeyValue>().await?;
         private_db.migrate_table::<PeerConnection>().await?;
+        private_db.migrate_table::<peer_connection::State>().await?;
 
         Ok(())
     }
@@ -299,10 +333,10 @@ impl Internal {
         match event {
             con::Msg::NewConnectionEstablished {
                 orig,
-                id,
+                connection_id,
                 web_rtc_ids,
             } => {
-                log::info!("New connection established: {}", id);
+                log::info!("New connection established: {}", connection_id);
 
                 if let Some(index) = self
                     .new_connections
@@ -310,16 +344,22 @@ impl Internal {
                     .position(|connection| connection.0 == orig)
                 {
                     let (_, new_connection, done) = self.new_connections.swap_remove(index);
-                    let connection = PeerConnection::from_service(id, web_rtc_ids, new_connection);
+                    let connection = PeerConnection::from_service(connection_id, web_rtc_ids, new_connection);
 
-                    done.send(match connection.write(self.key_db.connection()).await {
+                    let write_result = connection.write(self.key_db.connection()).await;
+                    let result = match write_result {
                         Ok(()) => {
+                            let conn = connection.clone();
                             self.user_connections.push(connection);
+                            let _ = self
+                                .event_tx
+                                .send(ui::LedgerEvent::ConnectionEstablished { connection: conn })
+                                .await;
                             Ok(())
                         }
                         Err(error) => Err(error),
-                    })
-                    .ok();
+                    };
+                    done.send(result).ok();
                 }
             }
 
@@ -330,6 +370,10 @@ impl Internal {
                             itr.stopped();
                         }
                     }
+                    let _ = self
+                        .event_tx
+                        .send(ui::LedgerEvent::ConnectionLost { id })
+                        .await;
                 }
                 crate::peer_connection::handler::Id::Creating(id) => {
                     self.new_connections.retain(|conn| conn.0 != id);
@@ -342,6 +386,10 @@ impl Internal {
                             itr.stopped();
                         }
                     }
+                    let _ = self
+                        .event_tx
+                        .send(ui::LedgerEvent::ConnectionLost { id })
+                        .await;
                 }
                 crate::peer_connection::handler::Id::Creating(id) => {
                     if let Some(index) = self
@@ -354,6 +402,26 @@ impl Internal {
                     }
                 }
             },
+            con::Msg::NameAcceptRequired {
+                connection_id,
+                private_chain_id,
+                first_name,
+                last_name,
+                middle_name,
+                birthday,
+            } => {
+                let _ = self
+                    .event_tx
+                    .send(ui::LedgerEvent::WaitForNameAccept {
+                        connection_id,
+                        private_chain_id,
+                        first_name,
+                        last_name,
+                        middle_name,
+                        birthday,
+                    })
+                    .await;
+            }
         }
     }
 }

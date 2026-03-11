@@ -82,11 +82,11 @@ impl UserDatabase {
         last_name: String,
         middle_name: Option<String>,
         date_of_birth: NaiveDate,
-    ) -> Result<(User, LedgerNode)> {
+    ) -> Result<(User, LedgerNode, tokio::sync::mpsc::Receiver<crate::ledger_node::ui::LedgerEvent>)> {
         let user = User::new(first_name, last_name)?;
         user.validate()?;
 
-        let user_service = LedgerNode::create_new_instance(
+        let (user_service, event_rx) = LedgerNode::create_new_instance(
             &self.base_data_path,
             &user,
             middle_name,
@@ -106,7 +106,7 @@ impl UserDatabase {
         .execute(&self.pool)
         .await?;
 
-        Ok((user, user_service))
+        Ok((user, user_service, event_rx))
     }
 
     pub async fn get_user(&self, id: &UserId) -> Result<User> {
