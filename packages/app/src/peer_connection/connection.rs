@@ -59,7 +59,7 @@ impl Connection {
         self.handler.is_some()
     }
 
-    pub fn start(&mut self, to_ledger: crate::ledger_node::con::Service) {
+    pub fn start(&mut self, to_ledger: crate::ledger_node::backend::con::Service) {
         if self.handler.is_none() {
             if let Config::WebRtc { ids } = &self.config {
                 let handler = Service::restart(self.id.clone(), ids.clone(), to_ledger);

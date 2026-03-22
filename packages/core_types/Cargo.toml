@@ -15,3 +15,4 @@ dioxus = { workspace = true, optional = true }
 default = []
 desktop = ["chrono", "dioxus"]
 mobile = ["chrono", "dioxus"]
+sqlite = []

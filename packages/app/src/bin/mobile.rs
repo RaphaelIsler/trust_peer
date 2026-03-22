@@ -14,5 +14,6 @@ fn App() -> Element {
         // Global app resources
         document::Link { rel: "stylesheet", href: MAIN_CSS }
         UserManager {}
+        BarcodeScanner {}
     }
 }

@@ -2,13 +2,13 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqlitePool};
 
-pub type UserId = helper::UId<User>;
+pub type Id = helper::UId<User>;
 
 /// Represents a user in the system
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct User {
     /// Unique user ID
-    pub id: UserId,
+    pub id: Id,
 
     /// First name (required)
     pub first_name: String,
@@ -22,19 +22,19 @@ pub struct User {
 
 impl User {
     /// Creates a new user
-    pub fn new(first_name: String, last_name: String) -> crate::Result<Self> {
-        let id = UserId::new();
+    pub fn new(first_name: String, last_name: String) -> Self {
+        let id = Id::new();
 
-        Ok(Self {
+        Self {
             id,
             first_name,
             last_name,
             created_at: chrono::Utc::now(),
-        })
+        }
     }
 
     /// Returns the ID
-    pub fn id(&self) -> &UserId {
+    pub fn id(&self) -> &Id {
         &self.id
     }
 
@@ -61,8 +61,36 @@ impl User {
     }
 }
 
+#[cfg(feature = "frontend")]
+#[path = "."]
+mod m_frontend {
+    use super::*;
+    use dioxus::prelude::*;
+
+    #[component]
+    pub fn Show(user: User, selected: Option<EventHandler<Id>>) -> Element {
+        rsx! {
+            div {
+                class: "user-card",
+                onclick: move |_| {
+                    if let Some(handler) = &selected {
+                        handler.call(user.id.clone());
+                    }
+                },
+                style: "border: 1px solid #ccc; padding: 10px; border-radius: 5px;",
+                h3 { "{user.full_name()}" }
+                p { "ID: {user.id.inner()}" }
+                p { "Created At: {user.created_at}" }
+            }
+        }
+    }
+}
+#[cfg(feature = "frontend")]
+pub use m_frontend::*;
+
+#[cfg(feature = "backend")]
 impl db::DbEntity for User {
-    type Id = UserId;
+    type Id = Id;
 
     fn id(&self) -> &Self::Id {
         &self.id

@@ -44,7 +44,7 @@ async fn main() -> anyhow::Result<()> {
     println!("  Room ID: {}", room_id);
 
     // Create configuration
-    let config = P2pConfig::new(signaling_server, room_id)
+    let config = P2pConfig::new(signaling_server.clone(), room_id)
         .with_timeout(30)
         .with_stun_servers(vec![]);
 

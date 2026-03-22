@@ -2,6 +2,7 @@ use anyhow::Result;
 use sqlx::SqlitePool;
 
 /// Generic trait for database entities
+#[allow(async_fn_in_trait)]
 pub trait DbEntity: Sized + serde::Serialize + serde::de::DeserializeOwned {
     /// Unique identifier type for this entity
     type Id: Clone;

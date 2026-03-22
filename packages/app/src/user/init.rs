@@ -2,12 +2,6 @@ use crate::{User, UserDatabase};
 use anyhow::Result;
 use std::path::PathBuf;
 
-/// Returns the path to the user database
-pub fn get_db_path() -> Result<PathBuf> {
-    let data_dir = crate::get_data_directory()?;
-    Ok(data_dir.join("users.sqlite"))
-}
-
 /// Initializes the user database and returns the path
 pub async fn init_user_database() -> Result<PathBuf> {
     // Determine storage location for the database

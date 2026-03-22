@@ -113,10 +113,7 @@ pub fn UserManager() -> Element {
 
                 for user in users.read().iter() {
                     if let Some(service) = user_services().get(&user.id.inner().to_string()).cloned() {
-                        UserCard {
-                            user: user.clone(),
-                            service,
-                        }
+                        UserCard { user: user.clone(), service }
                     }
                 }
             }
@@ -125,7 +122,7 @@ pub fn UserManager() -> Element {
 }
 
 async fn load_users() -> anyhow::Result<Vec<User>> {
-    use crate::user_init::get_db_path;
+    use crate::user::init::get_db_path;
 
     let db_path = get_db_path()?;
     let db = UserDatabase::open(&db_path).await?;

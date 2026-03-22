@@ -1,11 +1,11 @@
+use super::WebRtcIds;
+use crate::ledger_node::backend::con::Service as ToLedgerNode;
 use anyhow::Result;
 use core_types::Timestamp;
 use p2p_webrtc::data_channel::DataChannel;
 use p2p_webrtc::{P2pConfig, P2pWebRtc};
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
-
-use super::WebRtcIds;
 
 #[derive(Clone)]
 pub enum Id {
@@ -36,14 +36,11 @@ pub struct Service {
     tx: mpsc::Sender<ToConnection>,
 }
 
-
-
-
 pub struct Internal {
     id: Id,
     data_channel: DataChannel,
-    to_ledger: crate::ledger_node::con::Service,
-    state: Option<super::State>,
+    to_ledger: ToLedgerNode,
+    state: Option<super::TrustState>,
 }
 
 impl PartialEq for Service {
@@ -54,23 +51,19 @@ impl PartialEq for Service {
 
 impl Service {
     const DEFAULT_SIGNALING_SERVER: &'static str = "ws://127.0.0.1:3000";
-    pub fn start_init(
-        id: u8,
-        web_rtc: WebRtcIds,
-        to_ledger: crate::ledger_node::con::Service,
-    ) -> Self {
+    pub fn start_init(id: u8, web_rtc: WebRtcIds, to_ledger: ToLedgerNode) -> Self {
         Self::start(Id::Creating(id), web_rtc, to_ledger)
     }
 
     pub fn restart(
         id: blockchain::blockchain::Id,
         web_rtc: WebRtcIds,
-        to_ledger: crate::ledger_node::con::Service,
+        to_ledger: ToLedgerNode,
     ) -> Self {
         Self::start(Id::Established(id), web_rtc, to_ledger)
     }
 
-    fn start(id: Id, web_rtc: WebRtcIds, to_ledger: crate::ledger_node::con::Service) -> Self {
+    fn start(id: Id, web_rtc: WebRtcIds, to_ledger: ToLedgerNode) -> Self {
         let (tx, rx) = mpsc::channel(64);
         tokio::spawn(async move {
             let config =
@@ -102,11 +95,7 @@ impl Service {
 }
 
 impl Internal {
-    async fn handle_ledger(
-        &mut self,
-        msg: ToConnection,
-        to_ledger: &crate::ledger_node::con::Service,
-    ) {
+    async fn handle_ledger(&mut self, msg: ToConnection, to_ledger: &ToLedgerNode) {
         match msg {
             ToConnection::Stop { tx } => {
                 let close_result = self.data_channel.close().await;
@@ -128,11 +117,11 @@ impl Internal {
                 birthday,
             } => {
                 if self.state.is_none() {
-                    self.state = Some(super::State {
+                    self.state = Some(super::TrustState {
                         id: public,
                         last_public_singleton_checked: None,
                         last_validated_public_block_id: None,
-                        trust_state: super::TrustState::WaitForNameAccept,
+                        name_accepted: None,
                         last_seen_at: Timestamp::now(),
                         private_chain_id: private.clone(),
                     });
@@ -161,11 +150,7 @@ impl Internal {
         });
     }
 
-    async fn process(
-        &mut self,
-        to_ledger: crate::ledger_node::con::Service,
-        mut rx: mpsc::Receiver<ToConnection>,
-    ) {
+    async fn process(&mut self, to_ledger: ToLedgerNode, mut rx: mpsc::Receiver<ToConnection>) {
         let poll_interval = Duration::from_millis(50);
         self.send(P2P::Hello).await;
         loop {

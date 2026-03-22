@@ -198,6 +198,39 @@ impl fmt::Display for Q32_32 {
     }
 }
 
+#[cfg(feature = "sqlite")]
+pub mod sqlite {
+    use super::*;
+    use sqlx::encode::IsNull;
+    use sqlx::sqlite::SqliteArgumentValue;
+    use sqlx::{sqlite, Decode, Encode, Sqlite};
+
+    impl Decode<'_, Sqlite> for Q32_32 {
+        fn decode(
+            value: sqlx::sqlite::SqliteValueRef<'_>,
+        ) -> Result<Self, sqlx::error::BoxDynError> {
+            let raw = <i64 as Decode<Sqlite>>::decode(value)?;
+            Ok(Self(raw as u64))
+        }
+    }
+
+    impl<'q> Encode<'q, Sqlite> for Q32_32 {
+        fn encode_by_ref(
+            &self,
+            args: &mut Vec<SqliteArgumentValue<'q>>,
+        ) -> Result<IsNull, Box<dyn std::error::Error + Send + Sync + 'static>> {
+            args.push(SqliteArgumentValue::Int64(self.0 as i64));
+            Ok(IsNull::No)
+        }
+    }
+
+    impl sqlx::Type<Sqlite> for Q32_32 {
+        fn type_info() -> sqlite::SqliteTypeInfo {
+            <i64 as sqlx::Type<Sqlite>>::type_info()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

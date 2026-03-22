@@ -1,118 +1,22 @@
 use crate::block_entry::{AppBlock, BlockEntry};
+use crate::ledger_node::{ToBackend, ToFrontend};
 use crate::money::Money;
 use crate::peer_connection;
 use crate::peer_connection::{Connection as PeerConnection, WebRtcIds};
-use crate::{KeyValue, User, UserId};
+use crate::{
+    user::{User, UserId},
+    KeyValue,
+};
 use anyhow::Result;
 use blockchain::Blockchain;
 use chrono::NaiveDate;
 use core_types::Timestamp;
 use db::DbEntity;
 use std::path::Path;
-use tokio::sync::mpsc;
-use tokio::sync::oneshot;
-
-/// communication to gui
-pub mod ui {
-    use super::*;
-
-    #[derive(helper::ServiceWrapper)]
-    pub enum Msg {
-        GetPrivateAndPublic(
-            oneshot::Sender<Result<(blockchain::blockchain::Id, blockchain::blockchain::Id)>>,
-        ),
-        GetBlocks {
-            id: blockchain::blockchain::Id,
-            count: usize,
-            start_at: Option<usize>,
-            tx: oneshot::Sender<Result<Vec<AppBlock>>>,
-        },
-        StartNewConnection {
-            ids_tx: oneshot::Sender<Result<WebRtcIds>>,
-            done: oneshot::Sender<Result<()>>,
-        },
-        CreateNewConnectionFromWebRtcIds {
-            ids: WebRtcIds,
-            tx: oneshot::Sender<Result<()>>,
-        },
-        GetPeerConnections(oneshot::Sender<Result<Vec<PeerConnection>>>),
-        UpdatePeerConnectionName {
-            id: blockchain::blockchain::Id,
-            name: Option<String>,
-            tx: oneshot::Sender<Result<()>>,
-        },
-    }
-
-    /// Events pushed proactively from LedgerNode to the GUI.
-    #[derive(Clone, PartialEq)]
-    pub enum LedgerEvent {
-        /// A peer introduced itself and is waiting for the user to accept or reject.
-        WaitForNameAccept {
-            connection_id: blockchain::Id,
-            private_chain_id: blockchain::Id,
-            first_name: String,
-            last_name: String,
-            middle_name: Option<String>,
-            birthday: Option<chrono::NaiveDate>,
-        },
-        /// A peer connection was fully established and persisted.
-        ConnectionEstablished {
-            connection: peer_connection::Connection,
-        },
-        /// An active peer connection was lost (stopped or failed).
-        ConnectionLost {
-            id: blockchain::Id,
-        },
-    }
-
-    #[derive(Clone)]
-    pub struct Service {
-        tx: tokio::sync::mpsc::Sender<Msg>,
-    }
-
-    impl PartialEq for Service {
-        fn eq(&self, other: &Self) -> bool {
-            self.tx.same_channel(&other.tx)
-        }
-    }
-
-    impl Service {
-        pub fn empty() -> Self {
-            let (tx, _rx) = tokio::sync::mpsc::channel(32);
-            Self { tx }
-        }
-
-        pub async fn create_new_instance(
-            base_path: impl AsRef<Path>,
-            user: &User,
-            middle_name: Option<String>,
-            date_of_birth: NaiveDate,
-        ) -> Result<(Self, mpsc::Receiver<LedgerEvent>)> {
-            let (mut internal, event_rx) =
-                Internal::create_new_instance(base_path, user, middle_name, date_of_birth).await?;
-            let (tx, rx) = tokio::sync::mpsc::channel(32);
-            tokio::spawn(async move {
-                internal.process(rx).await;
-            });
-            Ok((Self { tx }, event_rx))
-        }
-
-        pub async fn start(base_path: impl AsRef<Path>, user_id: &UserId) -> Result<(Self, mpsc::Receiver<LedgerEvent>)> {
-            let (mut internal, event_rx) = Internal::open(base_path, user_id).await?;
-            let (tx, rx) = tokio::sync::mpsc::channel(32);
-            tokio::spawn(async move {
-                internal.process(rx).await;
-            });
-            Ok((Self { tx }, event_rx))
-        }
-    }
-
-    pub type LedgerNode = Service;
-}
+use tokio::sync::{mpsc, oneshot};
 
 // communication to peer connection runtimes
 pub mod con {
-    use std::any;
 
     use super::*;
     use crate::peer_connection::handler::Id;
@@ -157,6 +61,86 @@ pub mod con {
     pub type LedgerNode = Service;
 }
 
+/// communication to gui
+#[derive(helper::ServiceWrapper)]
+pub enum Msg {
+    GetPublicPrivate(oneshot::Sender<Result<(blockchain::Id, blockchain::Id)>>),
+    GetCurrentMoney(oneshot::Sender<Result<Money>>),
+    FromGui(ToBackend, oneshot::Sender<Result<Option<ToFrontend>>>),
+}
+
+/// Events pushed proactively from LedgerNode to the GUI.
+#[derive(Clone, PartialEq)]
+pub enum AsyncEvent {
+    FrontendEvent(ToFrontend),
+    /// A peer introduced itself and is waiting for the user to accept or reject.
+    WaitForNameAccept {
+        connection_id: blockchain::Id,
+        private_chain_id: blockchain::Id,
+        first_name: String,
+        last_name: String,
+        middle_name: Option<String>,
+        birthday: Option<chrono::NaiveDate>,
+    },
+    /// A peer connection was fully established and persisted.
+    ConnectionEstablished {
+        new_connection_id: u8,
+        connection: peer_connection::Connection,
+    },
+    ConnectionEstablishedFailed {
+        new_connection_id: u8,
+    },
+    /// An active peer connection was lost (stopped or failed).
+    ConnectionLost {
+        id: blockchain::Id,
+    },
+}
+
+#[derive(Clone)]
+pub struct Service {
+    tx: tokio::sync::mpsc::Sender<Msg>,
+}
+
+impl PartialEq for Service {
+    fn eq(&self, other: &Self) -> bool {
+        self.tx.same_channel(&other.tx)
+    }
+}
+
+impl Service {
+    pub fn empty() -> Self {
+        let (tx, _rx) = tokio::sync::mpsc::channel(32);
+        Self { tx }
+    }
+
+    pub async fn create_new_instance(
+        base_path: impl AsRef<Path>,
+        user: &User,
+        middle_name: Option<String>,
+        date_of_birth: NaiveDate,
+    ) -> Result<(Self, mpsc::Receiver<AsyncEvent>)> {
+        let (mut internal, event_rx) =
+            Internal::create_new_instance(base_path, user, middle_name, date_of_birth).await?;
+        let (tx, rx) = tokio::sync::mpsc::channel(32);
+        tokio::spawn(async move {
+            internal.process(rx).await;
+        });
+        Ok((Self { tx }, event_rx))
+    }
+
+    pub async fn start(
+        base_path: impl AsRef<Path>,
+        user_id: &UserId,
+    ) -> Result<(Self, mpsc::Receiver<AsyncEvent>)> {
+        let (mut internal, event_rx) = Internal::open(base_path, user_id).await?;
+        let (tx, rx) = tokio::sync::mpsc::channel(32);
+        tokio::spawn(async move {
+            internal.process(rx).await;
+        });
+        Ok((Self { tx }, event_rx))
+    }
+}
+
 struct Internal {
     private_chain_db: db::DB,
     key_db: db::DB,
@@ -164,15 +148,12 @@ struct Internal {
     private_chain: Blockchain<BlockEntry>,
     public_chain: Blockchain<BlockEntry>,
     user_connections: Vec<PeerConnection>,
-    new_connections: Vec<(
-        u8,
-        peer_connection::Service,
-        tokio::sync::oneshot::Sender<Result<()>>,
-    )>,
+    new_connections: Vec<(u8, peer_connection::Service)>,
     init_id: u8,
     connection_tx: con::Service,
     connection_events_rx: mpsc::Receiver<con::Msg>,
-    event_tx: mpsc::Sender<ui::LedgerEvent>,
+    event_tx: mpsc::Sender<AsyncEvent>,
+    current: Money,
     new_connection_web_rtc_ids: WebRtcIds,
 }
 
@@ -180,7 +161,10 @@ impl Internal {
     const CURRENT_AMOUNT_MAX_AGE_SECS: u64 = 24 * 60 * 60;
 
     /// Opens the ledger node with a message receiver (used for per-user workers)
-    pub async fn open(base_path: impl AsRef<Path>, user_id: &UserId) -> Result<(Self, mpsc::Receiver<ui::LedgerEvent>)> {
+    pub async fn open(
+        base_path: impl AsRef<Path>,
+        user_id: &UserId,
+    ) -> Result<(Self, mpsc::Receiver<AsyncEvent>)> {
         Self::open_internal(base_path, user_id).await
     }
 
@@ -190,7 +174,7 @@ impl Internal {
         user: &User,
         middle_name: Option<String>,
         date_of_birth: NaiveDate,
-    ) -> Result<(Self, mpsc::Receiver<ui::LedgerEvent>)> {
+    ) -> Result<(Self, mpsc::Receiver<AsyncEvent>)> {
         let user_id = user.id.clone();
 
         let (mut ret, event_rx) = Self::open_internal(base_path, &user_id).await?;
@@ -225,7 +209,10 @@ impl Internal {
         Ok((ret, event_rx))
     }
 
-    async fn open_internal<P: AsRef<Path>>(base_path: P, user_id: &UserId) -> Result<(Self, mpsc::Receiver<ui::LedgerEvent>)> {
+    async fn open_internal<P: AsRef<Path>>(
+        base_path: P,
+        user_id: &UserId,
+    ) -> Result<(Self, mpsc::Receiver<AsyncEvent>)> {
         let base_path = base_path.as_ref();
         let user_dir = base_path.join(user_id.inner().to_string());
 
@@ -262,10 +249,12 @@ impl Internal {
             init_id: 0,
             connection_events_rx,
             event_tx,
+            current: Money::default(),
             new_connection_web_rtc_ids,
         };
 
         ret.ensure_recent_current_amount_snapshot().await?;
+        ret.current = ret.last_current_amount().unwrap_or_default();
 
         Ok((ret, event_rx))
     }
@@ -282,7 +271,9 @@ impl Internal {
         private_db.migrate_table::<crypto::KeyMeta>().await?;
         private_db.migrate_table::<KeyValue>().await?;
         private_db.migrate_table::<PeerConnection>().await?;
-        private_db.migrate_table::<peer_connection::State>().await?;
+        private_db
+            .migrate_table::<peer_connection::TrustState>()
+            .await?;
 
         Ok(())
     }
@@ -343,23 +334,26 @@ impl Internal {
                     .iter()
                     .position(|connection| connection.0 == orig)
                 {
-                    let (_, new_connection, done) = self.new_connections.swap_remove(index);
-                    let connection = PeerConnection::from_service(connection_id, web_rtc_ids, new_connection);
+                    let (_, new_connection) = self.new_connections.swap_remove(index);
+                    let connection =
+                        PeerConnection::from_service(connection_id, web_rtc_ids, new_connection);
 
                     let write_result = connection.write(self.key_db.connection()).await;
                     let result = match write_result {
                         Ok(()) => {
                             let conn = connection.clone();
-                            self.user_connections.push(connection);
-                            let _ = self
-                                .event_tx
-                                .send(ui::LedgerEvent::ConnectionEstablished { connection: conn })
-                                .await;
+                            self.user_connections.push(conn);
                             Ok(())
                         }
                         Err(error) => Err(error),
                     };
-                    done.send(result).ok();
+                    let _ = self
+                        .event_tx
+                        .send(AsyncEvent::ConnectionEstablished {
+                            new_connection_id: orig,
+                            connection: connection.clone(),
+                        })
+                        .await;
                 }
             }
 
@@ -372,7 +366,7 @@ impl Internal {
                     }
                     let _ = self
                         .event_tx
-                        .send(ui::LedgerEvent::ConnectionLost { id })
+                        .send(AsyncEvent::ConnectionLost { id: id })
                         .await;
                 }
                 crate::peer_connection::handler::Id::Creating(id) => {
@@ -388,7 +382,7 @@ impl Internal {
                     }
                     let _ = self
                         .event_tx
-                        .send(ui::LedgerEvent::ConnectionLost { id })
+                        .send(AsyncEvent::ConnectionLost { id: id })
                         .await;
                 }
                 crate::peer_connection::handler::Id::Creating(id) => {
@@ -397,8 +391,13 @@ impl Internal {
                         .iter()
                         .position(|connection| connection.0 == id)
                     {
-                        let (_, _, done) = self.new_connections.swap_remove(index);
-                        let _ = done.send(Err(error));
+                        let (_, _) = self.new_connections.swap_remove(index);
+                        let _ = self
+                            .event_tx
+                            .send(AsyncEvent::ConnectionEstablishedFailed {
+                                new_connection_id: id,
+                            })
+                            .await;
                     }
                 }
             },
@@ -410,28 +409,40 @@ impl Internal {
                 middle_name,
                 birthday,
             } => {
-                let _ = self
-                    .event_tx
-                    .send(ui::LedgerEvent::WaitForNameAccept {
-                        connection_id,
-                        private_chain_id,
-                        first_name,
-                        last_name,
-                        middle_name,
-                        birthday,
-                    })
-                    .await;
+                /*    let _ = self
+                .event_tx
+                .send(ToFrontend::WaitForNameAccept {
+                    connection_id,
+                    private_chain_id,
+                    first_name,
+                    last_name,
+                    middle_name,
+                    birthday,
+                })
+                .await;*/
             }
         }
     }
 }
 
 impl Internal {
-    pub async fn process(&mut self, mut ui_rx: tokio::sync::mpsc::Receiver<ui::Msg>) {
+    pub async fn process(&mut self, mut ui_rx: tokio::sync::mpsc::Receiver<Msg>) {
         loop {
             tokio::select! {
                 Some(msg) = ui_rx.recv() => {
-                    self.handle_ui_msg(msg).await;
+                    match msg{
+                        Msg::GetPublicPrivate(resp) => {
+                            let result = Ok((self.private_chain.id().clone(), self.public_chain.id().clone()));
+                            let _ = resp.send(result);
+                        }
+                        Msg::GetCurrentMoney(tx) => {
+                            let _ = tx.send(Ok(self.current));
+                        }
+                        Msg::FromGui(msg, resp) => {
+                            let result = self.handle_ui_msg(msg).await;
+                            let _ = resp.send(result);
+                        }
+                    }
                 }
                 Some(event) = self.connection_events_rx.recv() => {
                     self.on_connection_event(event).await;
@@ -443,71 +454,64 @@ impl Internal {
         }
     }
 
-    async fn handle_ui_msg(&mut self, msg: ui::Msg) {
-        use ui::Msg;
+    async fn handle_ui_msg(&mut self, msg: ToBackend) -> Result<Option<ToFrontend>> {
         match msg {
-            Msg::GetBlocks {
+            ToBackend::GetBlocks {
                 id,
                 count,
                 start_at,
-                tx,
             } => {
                 if self.private_chain.id() == &id {
                     let blocks = self.private_chain.block_from(count, start_at).await;
-                    let _ = tx.send(Ok(blocks));
+                    Ok(Some(ToFrontend::Blocks { id, blocks }))
                 } else if self.public_chain.id() == &id {
                     let blocks = self.public_chain.block_from(count, start_at).await;
-                    let _ = tx.send(Ok(blocks));
+                    Ok(Some(ToFrontend::Blocks { id, blocks }))
                 } else {
-                    let _ = tx.send(Err(anyhow::anyhow!("Blockchain not found")));
+                    Err(anyhow::anyhow!("Blockchain not found"))
                 }
             }
-            Msg::GetPrivateAndPublic(tx) => {
-                let _ = tx.send(Ok((
-                    self.private_chain.id().clone(),
-                    self.public_chain.id().clone(),
-                )));
-            }
-            Msg::StartNewConnection { ids_tx, done } => {
+            ToBackend::GetPrivateAndPublic => Ok(Some(ToFrontend::LedgerChains {
+                private: self.private_chain.id().clone(),
+                public: self.public_chain.id().clone(),
+            })),
+            ToBackend::StartNewConnection { new_connection_id } => {
                 self.new_connection_web_rtc_ids = WebRtcIds::new();
                 let ids = self.new_connection_web_rtc_ids.clone();
 
-                let _ = ids_tx.send(Ok(ids.clone()));
-                self.init_id += 1;
-                if self.init_id > 100 {
-                    self.init_id = 0;
-                }
-
                 self.new_connections.push((
-                    self.init_id,
+                    new_connection_id,
                     peer_connection::Service::start_init(
-                        self.init_id,
+                        new_connection_id,
+                        ids.clone(),
+                        self.connection_tx.clone(),
+                    ),
+                ));
+
+                Ok(Some(ToFrontend::ConnectionsIds {
+                    new_connection_id: self.init_id,
+                    ids: ids.clone(),
+                }))
+            }
+            ToBackend::CreateNewConnectionFromWebRtcIds {
+                new_connection_id,
+                ids,
+            } => {
+                self.new_connections.push((
+                    new_connection_id,
+                    peer_connection::Service::start_init(
+                        new_connection_id,
                         ids,
                         self.connection_tx.clone(),
                     ),
-                    done,
                 ));
-            }
-            Msg::CreateNewConnectionFromWebRtcIds { ids, tx } => {
-                self.init_id += 1;
-                if self.init_id > 100 {
-                    self.init_id = 0;
-                }
-                self.new_connections.push((
-                    self.init_id,
-                    peer_connection::Service::start_init(
-                        self.init_id,
-                        ids,
-                        self.connection_tx.clone(),
-                    ),
-                    tx,
-                ));
+                Ok(None)
             }
 
-            Msg::GetPeerConnections(tx) => {
-                let _ = tx.send(Ok(self.user_connections.clone()));
-            }
-            Msg::UpdatePeerConnectionName { id, name, tx } => {
+            ToBackend::GetPeerConnections => Ok(Some(ToFrontend::PeerConnections {
+                connections: self.user_connections.clone(),
+            })),
+            ToBackend::UpdatePeerConnectionName { id, name } => {
                 match self
                     .user_connections
                     .iter_mut()
@@ -516,17 +520,11 @@ impl Internal {
                     Some(connection) => {
                         connection.name = name;
                         match connection.write(self.key_db.connection()).await {
-                            Ok(()) => {
-                                let _ = tx.send(Ok(()));
-                            }
-                            Err(error) => {
-                                let _ = tx.send(Err(error));
-                            }
+                            Ok(()) => Ok(None),
+                            Err(error) => Err(error),
                         }
                     }
-                    None => {
-                        let _ = tx.send(Err(anyhow::anyhow!("Peer connection not found")));
-                    }
+                    None => Err(anyhow::anyhow!("Peer connection not found")),
                 }
             }
         }

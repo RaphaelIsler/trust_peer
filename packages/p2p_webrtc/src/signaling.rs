@@ -219,7 +219,7 @@ impl SignalingClient {
         // Connect to signaling server
         let stream = self.connect(signaling_server).await?;
 
-        let (connection_tx, mut connection_rx) = mpsc::unbounded_channel();
+        let (connection_tx, connection_rx) = mpsc::unbounded_channel();
         {
             let connection_tx = connection_tx.clone();
             // Start receiving signaling messages in background
@@ -255,7 +255,7 @@ impl SignalingClient {
     async fn run_connection_loop(
         &mut self,
         mut connection_rx: mpsc::UnboundedReceiver<ConnectionMsg>,
-        mut dc_tx: oneshot::Sender<DataChannel>,
+        dc_tx: oneshot::Sender<DataChannel>,
     ) -> Result<()> {
         let mut dc_tx = Some(dc_tx);
         loop {

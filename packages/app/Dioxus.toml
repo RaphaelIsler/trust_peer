@@ -1,0 +1,12 @@
+[application]
+name = "trust_peer"
+
+# Unified permissions - dx maps these automatically to:
+#   Android: <uses-permission android:name="android.permission.CAMERA" />
+#   iOS:     NSCameraUsageDescription in Info.plist
+[permissions]
+camera = { description = "Scan barcodes and QR codes to connect with peers" }
+
+[android]
+# Declares the camera hardware feature (optional but recommended for Play Store)
+features = ["android.hardware.camera"]

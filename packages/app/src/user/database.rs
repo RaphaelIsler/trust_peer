@@ -1,4 +1,5 @@
-use crate::{LedgerNode, Result, User, UserError, UserId};
+use crate::user::{User, UserId as Id};
+use crate::{LedgerNode, Result, UserError};
 use chrono::NaiveDate;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{Row, SqlitePool};
@@ -82,8 +83,12 @@ impl UserDatabase {
         last_name: String,
         middle_name: Option<String>,
         date_of_birth: NaiveDate,
-    ) -> Result<(User, LedgerNode, tokio::sync::mpsc::Receiver<crate::ledger_node::ui::LedgerEvent>)> {
-        let user = User::new(first_name, last_name)?;
+    ) -> Result<(
+        User,
+        LedgerNode,
+        tokio::sync::mpsc::Receiver<crate::ledger_node::ui::LedgerEvent>,
+    )> {
+        let user = User::new(first_name, last_name);
         user.validate()?;
 
         let (user_service, event_rx) = LedgerNode::create_new_instance(
@@ -109,7 +114,7 @@ impl UserDatabase {
         Ok((user, user_service, event_rx))
     }
 
-    pub async fn get_user(&self, id: &UserId) -> Result<User> {
+    pub async fn get_user(&self, id: &Id) -> Result<User> {
         let row = sqlx::query(
             "SELECT id, first_name, last_name, created_at
              FROM users WHERE id = ?1",
@@ -159,7 +164,7 @@ impl UserDatabase {
         Ok(users)
     }
 
-    pub async fn delete_user(&self, id: &UserId) -> Result<()> {
+    pub async fn delete_user(&self, id: &Id) -> Result<()> {
         let result = sqlx::query("DELETE FROM users WHERE id = ?1")
             .bind(id)
             .execute(&self.pool)
@@ -173,7 +178,7 @@ impl UserDatabase {
 
     pub async fn update_user(
         &self,
-        id: &UserId,
+        id: &Id,
         first_name: String,
         last_name: String,
     ) -> Result<User> {

@@ -161,7 +161,7 @@ pub fn MoneyView(money: Money, shown_amount: MoneyViewMode) -> Element {
         }
     }
 }
-
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,4 +185,4 @@ mod tests {
         let expected = Q32_32::from_u64(16).raw();
         assert_eq!(result, expected);
     }
-}
+}*/

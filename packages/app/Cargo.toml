@@ -25,11 +25,13 @@ helper = { workspace = true, features = ["uuid", "sqlx", "service"], optional = 
 uuid = { workspace = true, features = ["v4"] }
 
 [features]
-default = []
+default = ["chrono"]
+backend =  ["tokio", "p2p_webrtc", "db", "blockchain", "crypto", "sqlx", "thiserror", "helper", "core_types/desktop", "core_types/sqlite"]
+frontend = []
 server = ["dioxus/server", "tokio", "crypto", "blockchain"]
 web = ["dioxus/web"]
-desktop = ["dioxus/desktop", "chrono", "tokio", "p2p_webrtc", "db", "blockchain", "crypto", "sqlx", "thiserror", "helper", "core_types/desktop"]
-mobile = ["dioxus/mobile", "chrono", "tokio", "p2p_webrtc", "db", "blockchain", "crypto", "sqlx", "thiserror", "helper", "core_types/mobile"]
+desktop = ["dioxus/desktop", "backend", "frontend"]
+mobile = ["dioxus/mobile", "backend", "frontend"]
 
 # Multiple binaries for different platforms
 [[bin]]

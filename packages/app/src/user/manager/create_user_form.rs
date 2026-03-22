@@ -141,7 +141,7 @@ async fn create_user(
     LedgerNode,
     tokio::sync::mpsc::Receiver<crate::ledger_node::ui::LedgerEvent>,
 )> {
-    use crate::user_init::get_db_path;
+    use crate::user::init::get_db_path;
 
     let db_path = get_db_path()?;
     let db = UserDatabase::open(&db_path).await?;

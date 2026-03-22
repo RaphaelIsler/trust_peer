@@ -3,5 +3,6 @@
         "cargo build": true,
         "cargo check": true,
         "cargo test": true
-    }
+    },
+    "rust-analyzer.cargo.features": ["desktop"]
 }

@@ -1,9 +1,9 @@
 #[cfg(any(feature = "desktop", feature = "mobile"))]
-mod user_manager;
-#[cfg(any(feature = "desktop", feature = "mobile"))]
-pub use user_manager::UserManager;
-
-#[cfg(any(feature = "desktop", feature = "mobile"))]
 mod p2p_test;
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub use p2p_test::P2PTestComponent;
+
+#[cfg(feature = "mobile")]
+mod barcode_scanner;
+#[cfg(feature = "mobile")]
+pub use barcode_scanner::BarcodeScanner;

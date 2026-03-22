@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Trust Peer",
+      "type": "node",
+      "request": "launch",
+      "program": "dx",
+      "args": [
+        "serve --platform desktop --bin desktop --features desktop --package app",
+      ],
+      "cwd": "",
+      "env": { "LD_PRELOAD": "/lib/x86_64-linux-gnu/libpthread.so.0" },
+      "externalConsole": false,
+    },
+  ],
+}

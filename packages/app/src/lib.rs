@@ -24,37 +24,46 @@ pub fn get_data_directory() -> anyhow::Result<PathBuf> {
     }
 }
 
+mod interface;
+pub use interface::{ToBackend, ToFrontend};
 mod bank_account;
 mod block_entry;
 mod blockchain_validation;
 mod error;
 mod ledger_node;
 mod peer_connection;
-mod user;
-mod user_db;
+pub mod user;
 use money::Money;
 
-#[cfg(any(feature = "desktop", feature = "mobile"))]
+#[cfg(feature = "backend")]
 #[path = "."]
-mod backend {
+mod b {
     use super::*;
-    pub mod user_init;
     pub use bank_account::BankAccountView;
     pub use components::*;
     pub use money::MoneyView;
+    pub mod backend;
 }
 
-#[cfg(any(feature = "desktop", feature = "mobile"))]
-pub use backend::*;
+#[cfg(feature = "backend")]
+pub use b::*;
+
+#[cfg(feature = "frontend")]
+#[path = "."]
+mod f {
+    mod frontend;
+    pub use frontend::App;
+}
+
+#[cfg(feature = "frontend")]
+pub use f::*;
 
 pub use bank_account::{BankAccount, BankAccountId};
 pub use block_entry::{AppBlock, BlockEntry};
 pub use core_types::{KeyValue, Value};
 pub use core_types::{TimestampU64View, TimestampView};
 pub use error::{Result, UserError};
-pub use ledger_node::ui::LedgerNode;
-pub use user::{User, UserId};
-pub use user_db::UserDatabase;
+//pub use ledger_node::ui::LedgerNode;
 
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 pub use blockchain_validation::{verify_money_with_state, MoneyValidationState};

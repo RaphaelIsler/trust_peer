@@ -1,18 +1,26 @@
-use app::{P2PTestComponent, UserManager};
+use app::P2PTestComponent;
 use dioxus::prelude::*;
 
-const MAIN_CSS: Asset = asset!("/assets/main.css");
+use app::{App, ToBackend, ToFrontend};
+use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // Initialize logging
-    env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Debug)
-        .init();
+    let (tx_backend, rx_backend) = mpsc::channel::<ToBackend>(64);
+    let (tx_frontend, rx_frontend) = mpsc::channel::<ToFrontend>(64);
 
-    dioxus::launch(App);
+    let base_path = app::get_data_directory().expect("failed to get data directory");
+    app::backend::Service::start(base_path, rx_backend, tx_frontend);
+
+    dioxus::LaunchBuilder::new()
+        .with_context(tx_backend)
+        .with_context(Arc::new(Mutex::new(Some(rx_frontend))))
+        .launch(App);
 }
 
-#[component]
+/*#[component]
 #[allow(non_snake_case)]
 fn App() -> Element {
     rsx! {
@@ -21,3 +29,4 @@ fn App() -> Element {
         UserManager {}
     }
 }
+*/

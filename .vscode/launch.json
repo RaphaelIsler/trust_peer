@@ -94,10 +94,15 @@
                 "--bin",
                 "desktop",
                 "--features",
-                "desktop"
+                "desktop",
+                "--package",
+                "app"
             ],
-            "cwd": "${workspaceFolder}/packages/app",
-            "console": "integratedTerminal"
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+           "env": {
+                "LD_PRELOAD": "/lib/x86_64-linux-gnu/libpthread.so.0"
+            }
         },
         {
             "type": "node",
