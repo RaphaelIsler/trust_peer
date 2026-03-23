@@ -9,8 +9,7 @@ use tokio::sync::mpsc;
 pub struct Service {
     rx_backend: mpsc::Receiver<ToBackend>,
     tx_frontend: mpsc::Sender<ToFrontend>,
-    user: crate::user::backend::Service,
-    ledger_nodes: HashMap<String, (crate::user::User, LedgerService)>,
+    ledger_nodes: HashMap<String, LedgerService>,
     ledger_events_tx: mpsc::Sender<(blockchain::blockchain::Id, AsyncEvent)>,
     ledger_events: mpsc::Receiver<(blockchain::blockchain::Id, AsyncEvent)>,
     base_path: PathBuf,
@@ -28,24 +27,53 @@ impl Service {
             let mut service = Self {
                 rx_backend,
                 tx_frontend,
-                user: crate::user::backend::Service::new(),
                 ledger_nodes: HashMap::new(),
                 ledger_events_tx,
                 ledger_events,
                 base_path: path,
             };
-            service.init().await;
+            if let Err(e) = service.init().await {
+                log::error!("Backend init failed: {e}");
+            }
             service.run().await;
         });
     }
+
+    /// Discovers existing LedgerNode directories under base_path.
+    /// A valid directory has a UUID name and contains `private.sqlite`.
+    fn discover_ledger_nodes(base_path: &Path) -> Vec<blockchain::blockchain::Id> {
+        let mut ids = Vec::new();
+        if !base_path.is_dir() {
+            return ids;
+        }
+        if let Ok(entries) = std::fs::read_dir(base_path) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() && path.join("private.sqlite").exists() {
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        if let Ok(id) = blockchain::blockchain::Id::parse_str(name) {
+                            ids.push(id);
+                        }
+                    }
+                }
+            }
+        }
+        ids
+    }
+
     async fn init(&mut self) -> Result<()> {
-        self.user.init().await?;
-        let users = self.user.load_users().await?;
-        for user in &users.users {
-            let (service, event_rx) = LedgerService::start(self.base_path.clone(), user.id()).await?;
-            let (_public, private) = service.get_public_private().await?;
-            self.spawn_event_forwarder(private.clone(), event_rx);
-            self.ledger_nodes.insert(private.to_string(), (user.clone(), service));
+        let ids = Self::discover_ledger_nodes(&self.base_path);
+        for id in ids {
+            match LedgerService::open(self.base_path.clone(), &id).await {
+                Ok((service, event_rx)) => {
+                    let (_public, private) = service.get_public_private().await?;
+                    self.spawn_event_forwarder(private.clone(), event_rx);
+                    self.ledger_nodes.insert(private.to_string(), service);
+                }
+                Err(e) => {
+                    log::warn!("Failed to open ledger node {}: {}", id.to_string(), e);
+                }
+            }
         }
         Ok(())
     }
@@ -78,7 +106,7 @@ impl Service {
                 birthday,
             } => Some(LedgerMsg::WaitForNameAccept {
                 connection_id,
-                identification: crate::user::Identification::NameAndBirth {
+                identification: crate::ledger_node::Identification::NameAndBirth {
                     first_name,
                     last_name,
                     middle_name,
@@ -95,18 +123,30 @@ impl Service {
             AsyncEvent::ConnectionEstablishedFailed { new_connection_id } => {
                 Some(LedgerMsg::ConnectionEstablishedFailed { new_connection_id })
             }
-            AsyncEvent::ConnectionLost { id } => {
-                Some(LedgerMsg::ConnectionLost { connection: id })
-            }
+            AsyncEvent::ConnectionLost { id } => Some(LedgerMsg::ConnectionLost { connection: id }),
         }
+    }
+
+    async fn build_init_entries(&self) -> Result<Vec<(blockchain::blockchain::Id, crate::Money)>> {
+        let mut entries = Vec::new();
+        for service in self.ledger_nodes.values() {
+            let money = service.get_current_money().await?;
+            let (_public, private) = service.get_public_private().await?;
+            entries.push((private, money));
+        }
+        Ok(entries)
     }
 
     async fn run(&mut self) {
         loop {
             tokio::select! {
                 Some(message) = self.rx_backend.recv() => {
-                    if let Some(response) = self.handle_frontend(message).await.unwrap() {
-                        self.tx_frontend.send(response).await.unwrap();
+                    match self.handle_frontend(message).await {
+                        Ok(Some(response)) => {
+                            let _ = self.tx_frontend.send(response).await;
+                        }
+                        Ok(None) => {}
+                        Err(e) => log::error!("Backend error: {e}"),
                     }
                 },
                 Some((private, event)) = self.ledger_events.recv() => {
@@ -120,29 +160,24 @@ impl Service {
 
     async fn handle_frontend(&mut self, message: ToBackend) -> Result<Option<ToFrontend>> {
         Ok(match message {
-            ToBackend::Init => {
-                let mut entries = Vec::new();
-                for (private_str, (user, service)) in &self.ledger_nodes {
-                    let money = service.get_current_money().await?;
-                    let (_, private) = service.get_public_private().await?;
-                    entries.push((user.clone(), private, money));
-                }
-                Some(ToFrontend::Init(entries))
-            }
-            ToBackend::User(user) => {
-                if let Some(resp) = self.user.handle_frontend(user).await? {
-                    Some(ToFrontend::User(resp))
-                } else {
-                    None
-                }
+            ToBackend::Init => Some(ToFrontend::Init(self.build_init_entries().await?)),
+            ToBackend::Create(identification) => {
+                let new_id = blockchain::blockchain::Id::new();
+                let (service, event_rx) = LedgerService::create_new_instance(
+                    &self.base_path,
+                    &new_id,
+                    identification,
+                )
+                .await?;
+                let (_public, private) = service.get_public_private().await?;
+                self.spawn_event_forwarder(private.clone(), event_rx);
+                self.ledger_nodes.insert(private.to_string(), service);
+                Some(ToFrontend::Init(self.build_init_entries().await?))
             }
             ToBackend::Ledger { private, msg } => {
-                if let Some((_, ledger)) = self.ledger_nodes.get_mut(&private.to_string()) {
+                if let Some(ledger) = self.ledger_nodes.get_mut(&private.to_string()) {
                     if let Some(back) = ledger.from_gui(msg).await? {
-                        Some(ToFrontend::Ledger {
-                            private: private,
-                            msg: back,
-                        })
+                        Some(ToFrontend::Ledger { private, msg: back })
                     } else {
                         None
                     }

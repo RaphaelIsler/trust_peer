@@ -1,38 +1,26 @@
-use blockchain::{block, blockchain::Id as BlockchainId};
+use blockchain::blockchain::Id as BlockchainId;
 use serde::{Deserialize, Serialize};
 
 use crate::ledger_node;
+
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum ToFrontend {
-    User(crate::user::ToFrontend),
     Ledger {
         private: BlockchainId,
         msg: ledger_node::ToFrontend,
     },
-    Init(Vec<(crate::user::User, blockchain::blockchain::Id, crate::Money)>)
+    /// Sent after Init or after creating/loading LedgerNodes.
+    /// Each entry: (private chain id, current balance).
+    Init(Vec<(BlockchainId, crate::Money)>),
 }
-
-impl From<crate::user::ToFrontend> for ToFrontend {
-    fn from(value: crate::user::ToFrontend) -> Self {
-        Self::User(value)
-    }
-}
-
-//-------------------
-// Backend part
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum ToBackend {
     Init,
-    User(crate::user::ToBackend),
+    /// Create a new LedgerNode with the given initial identification.
+    Create(crate::ledger_node::Identification),
     Ledger {
         private: BlockchainId,
         msg: ledger_node::ToBackend,
     },
-}
-
-impl From<crate::user::ToBackend> for ToBackend {
-    fn from(value: crate::user::ToBackend) -> Self {
-        Self::User(value)
-    }
 }

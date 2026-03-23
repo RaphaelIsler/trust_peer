@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqlitePool};
 
-pub type Id = helper::UId<User>;
+pub type Id = blockchain::blockchain::Id;
 
 /// Represents a user in the system
 #[derive(Clone, PartialEq, Serialize, Deserialize)]

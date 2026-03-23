@@ -1,19 +1,17 @@
 use crate::block_entry::{AppBlock, BlockEntry};
-use crate::ledger_node::{ToBackend, ToFrontend};
+use crate::ledger_node::{identification::Identification, ToBackend, ToFrontend};
 use crate::money::Money;
 use crate::peer_connection;
 use crate::peer_connection::{Connection as PeerConnection, WebRtcIds};
-use crate::{
-    user::{User, UserId},
-    KeyValue,
-};
+use crate::{KeyValue, Value};
 use anyhow::Result;
 use blockchain::Blockchain;
-use chrono::NaiveDate;
 use core_types::Timestamp;
 use db::DbEntity;
 use std::path::Path;
 use tokio::sync::{mpsc, oneshot};
+
+type LedgerNodeId = blockchain::blockchain::Id;
 
 // communication to peer connection runtimes
 pub mod con {
@@ -115,12 +113,11 @@ impl Service {
 
     pub async fn create_new_instance(
         base_path: impl AsRef<Path>,
-        user: &User,
-        middle_name: Option<String>,
-        date_of_birth: NaiveDate,
+        id: &LedgerNodeId,
+        identification: Identification,
     ) -> Result<(Self, mpsc::Receiver<AsyncEvent>)> {
         let (mut internal, event_rx) =
-            Internal::create_new_instance(base_path, user, middle_name, date_of_birth).await?;
+            Internal::create_new_instance(base_path, id, identification).await?;
         let (tx, rx) = tokio::sync::mpsc::channel(32);
         tokio::spawn(async move {
             internal.process(rx).await;
@@ -128,11 +125,11 @@ impl Service {
         Ok((Self { tx }, event_rx))
     }
 
-    pub async fn start(
+    pub async fn open(
         base_path: impl AsRef<Path>,
-        user_id: &UserId,
+        id: &LedgerNodeId,
     ) -> Result<(Self, mpsc::Receiver<AsyncEvent>)> {
-        let (mut internal, event_rx) = Internal::open(base_path, user_id).await?;
+        let (mut internal, event_rx) = Internal::open(base_path, id).await?;
         let (tx, rx) = tokio::sync::mpsc::channel(32);
         tokio::spawn(async move {
             internal.process(rx).await;
@@ -160,32 +157,30 @@ struct Internal {
 impl Internal {
     const CURRENT_AMOUNT_MAX_AGE_SECS: u64 = 24 * 60 * 60;
 
-    /// Opens the ledger node with a message receiver (used for per-user workers)
+    /// Opens an existing LedgerNode.
     pub async fn open(
         base_path: impl AsRef<Path>,
-        user_id: &UserId,
+        id: &LedgerNodeId,
     ) -> Result<(Self, mpsc::Receiver<AsyncEvent>)> {
-        Self::open_internal(base_path, user_id).await
+        Self::open_internal(base_path, id).await
     }
 
-    /// Should be call on first creation of a user to initialize the databases and create the first blocks
+    /// Should be called on first creation of a LedgerNode to initialize the databases and first blocks.
     pub async fn create_new_instance(
         base_path: impl AsRef<Path>,
-        user: &User,
-        middle_name: Option<String>,
-        date_of_birth: NaiveDate,
+        id: &LedgerNodeId,
+        identification: Identification,
     ) -> Result<(Self, mpsc::Receiver<AsyncEvent>)> {
-        let user_id = user.id.clone();
+        let (mut ret, event_rx) = Self::open_internal(base_path, id).await?;
 
-        let (mut ret, event_rx) = Self::open_internal(base_path, &user_id).await?;
-
-        if let Some(middle_name) = middle_name {
-            KeyValue::new_typed("user.middle_name".to_string(), middle_name)
-                .write(ret.key_db.connection())
-                .await?;
-        }
-
-        KeyValue::new_typed("user.date_of_birth".to_string(), date_of_birth.to_string())
+        // Store the first identification in key_db.
+        KeyValue::new_typed(
+            Identification::storage_key(0),
+            Value::Object(identification.to_json()?),
+        )
+        .write(ret.key_db.connection())
+        .await?;
+        KeyValue::new_typed(Identification::count_key().to_string(), 1i64)
             .write(ret.key_db.connection())
             .await?;
 
@@ -199,10 +194,14 @@ impl Internal {
         let public_pub = ret.add_key_pair(ret.public_chain.id()).await?;
         let fist_public = BlockEntry::new_verification(&public_pub)?;
         let first_link = blockchain::BlockLink::from_block(ret.private_chain.id(), &first_block)?;
+        // Record the identification hash on the public chain.
+        let ident_hash = BlockEntry::Identification {
+            data: identification.hash_bytes(),
+        };
 
         ret.public_chain
             .append_entries_with_db(
-                vec![fist_public, BlockEntry::from_link(first_link)?],
+                vec![fist_public, BlockEntry::from_link(first_link)?, ident_hash],
                 &ret.public_chain_db,
             )
             .await?;
@@ -211,10 +210,10 @@ impl Internal {
 
     async fn open_internal<P: AsRef<Path>>(
         base_path: P,
-        user_id: &UserId,
+        id: &LedgerNodeId,
     ) -> Result<(Self, mpsc::Receiver<AsyncEvent>)> {
         let base_path = base_path.as_ref();
-        let user_dir = base_path.join(user_id.inner().to_string());
+        let user_dir = base_path.join(id.inner().to_string());
 
         std::fs::create_dir_all(&user_dir)?;
 
@@ -287,6 +286,63 @@ impl Internal {
 
     async fn add_key_pair<T>(&self, id: &helper::UId<T>) -> Result<crypto::KeyMeta> {
         crypto::KeyMeta::create_ed25519(id, self.key_db.connection()).await
+    }
+
+    /// Loads all identifications stored in key_db.
+    async fn load_identifications(&self) -> Result<Vec<Identification>> {
+        let count_kv =
+            KeyValue::read(self.key_db.connection(), &Identification::count_key().to_string())
+                .await?;
+        let count: u32 = count_kv
+            .and_then(|kv| kv.get_value::<i64>().ok())
+            .map(|v| v as u32)
+            .unwrap_or(0);
+
+        let mut identifications = Vec::with_capacity(count as usize);
+        for i in 0..count {
+            let key = Identification::storage_key(i);
+            if let Some(kv) = KeyValue::read(self.key_db.connection(), &key).await? {
+                if let Ok(json) = kv.get_value::<String>() {
+                    if let Ok(ident) = Identification::from_json(&json) {
+                        identifications.push(ident);
+                    }
+                }
+            }
+        }
+        Ok(identifications)
+    }
+
+    /// Stores a new identification in key_db and records its hash on the public chain.
+    async fn add_identification(&mut self, identification: Identification) -> Result<()> {
+        let count_kv =
+            KeyValue::read(self.key_db.connection(), &Identification::count_key().to_string())
+                .await?;
+        let count: u32 = count_kv
+            .and_then(|kv| kv.get_value::<i64>().ok())
+            .map(|v| v as u32)
+            .unwrap_or(0);
+
+        KeyValue::new_typed(
+            Identification::storage_key(count),
+            Value::Object(identification.to_json()?),
+        )
+        .write(self.key_db.connection())
+        .await?;
+
+        KeyValue::new_typed(Identification::count_key().to_string(), (count + 1) as i64)
+            .write(self.key_db.connection())
+            .await?;
+
+        self.public_chain
+            .append_entries_with_db(
+                vec![BlockEntry::Identification {
+                    data: identification.hash_bytes(),
+                }],
+                &self.public_chain_db,
+            )
+            .await?;
+
+        Ok(())
     }
 
     fn last_current_amount(&self) -> Option<Money> {
@@ -475,6 +531,15 @@ impl Internal {
                 private: self.private_chain.id().clone(),
                 public: self.public_chain.id().clone(),
             })),
+            ToBackend::GetIdentifications => {
+                let identifications = self.load_identifications().await?;
+                Ok(Some(ToFrontend::Identifications(identifications)))
+            }
+            ToBackend::AddIdentification(identification) => {
+                self.add_identification(identification).await?;
+                let identifications = self.load_identifications().await?;
+                Ok(Some(ToFrontend::Identifications(identifications)))
+            }
             ToBackend::StartNewConnection { new_connection_id } => {
                 self.new_connection_web_rtc_ids = WebRtcIds::new();
                 let ids = self.new_connection_web_rtc_ids.clone();

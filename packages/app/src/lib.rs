@@ -32,7 +32,8 @@ mod blockchain_validation;
 mod error;
 mod ledger_node;
 mod peer_connection;
-pub mod user;
+// user module kept as archive; not part of the main flow
+// pub mod user;
 use money::Money;
 
 #[cfg(feature = "backend")]

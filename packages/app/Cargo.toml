@@ -24,6 +24,7 @@ thiserror = { workspace = true, optional = true }
 helper = { workspace = true, features = ["uuid", "sqlx", "service"], optional = true }
 uuid = { workspace = true, features = ["v4"] }
 
+
 [features]
 default = ["chrono"]
 backend =  ["tokio", "p2p_webrtc", "db", "blockchain", "crypto", "sqlx", "thiserror", "helper", "core_types/desktop", "core_types/sqlite"]

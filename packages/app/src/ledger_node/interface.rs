@@ -1,6 +1,7 @@
 use crate::peer_connection::{Connection, WebRtcIds};
 use crate::AppBlock;
 use serde::{Deserialize, Serialize};
+
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum ToFrontend {
     LedgerChains {
@@ -11,6 +12,7 @@ pub enum ToFrontend {
         id: blockchain::blockchain::Id,
         blocks: Vec<AppBlock>,
     },
+    Identifications(Vec<super::Identification>),
     ConnectionsIds {
         new_connection_id: u8,
         ids: WebRtcIds,
@@ -27,7 +29,7 @@ pub enum ToFrontend {
     },
     WaitForNameAccept {
         connection_id: blockchain::Id,
-        identification: crate::user::Identification,
+        identification: super::Identification,
     },
     PeerConnections {
         connections: Vec<Connection>,
@@ -42,6 +44,8 @@ pub enum ToBackend {
         count: usize,
         start_at: Option<usize>,
     },
+    AddIdentification(super::Identification),
+    GetIdentifications,
     StartNewConnection {
         new_connection_id: u8,
     },
