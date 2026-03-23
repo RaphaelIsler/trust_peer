@@ -1,12 +1,15 @@
+use crate::money::Money;
 use crate::peer_connection::{Connection, WebRtcIds};
 use crate::AppBlock;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum ToFrontend {
-    LedgerChains {
+    Initialized {
         private: blockchain::blockchain::Id,
         public: blockchain::blockchain::Id,
+        money: Money,
+        identifications: Vec<super::Identification>,
     },
     Blocks {
         id: blockchain::blockchain::Id,
@@ -38,7 +41,7 @@ pub enum ToFrontend {
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum ToBackend {
-    GetPrivateAndPublic,
+    Init,
     GetBlocks {
         id: blockchain::blockchain::Id,
         count: usize,

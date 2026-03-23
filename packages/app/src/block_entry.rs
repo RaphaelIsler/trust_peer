@@ -129,6 +129,27 @@ pub fn BlockView(block: AppBlock, index: usize) -> Element {
     }
 }
 
+/// Renders a full blockchain from an `Option<Vec<AppBlock>>`.
+/// Shows nothing when `None`, an empty-state message when the vec is empty,
+/// and the block list otherwise.
+#[component]
+pub fn BlockChainView(blocks: Option<Vec<AppBlock>>) -> Element {
+    let Some(blocks) = blocks else {
+        return rsx! {};
+    };
+
+    rsx! {
+        div { class: "blockchain",
+            if blocks.is_empty() {
+                div { class: "blockchain__empty", "No blocks" }
+            }
+            for (index , block) in blocks.into_iter().enumerate() {
+                BlockView { index, block }
+            }
+        }
+    }
+}
+
 fn hex_preview(bytes: &[u8], max_chars: usize) -> String {
     let hex = hex::encode(bytes);
     if hex.len() <= max_chars {

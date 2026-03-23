@@ -512,6 +512,15 @@ impl Internal {
 
     async fn handle_ui_msg(&mut self, msg: ToBackend) -> Result<Option<ToFrontend>> {
         match msg {
+            ToBackend::Init => {
+                let identifications = self.load_identifications().await?;
+                Ok(Some(ToFrontend::Initialized {
+                    private: self.private_chain.id().clone(),
+                    public: self.public_chain.id().clone(),
+                    money: self.current,
+                    identifications,
+                }))
+            }
             ToBackend::GetBlocks {
                 id,
                 count,
@@ -527,10 +536,6 @@ impl Internal {
                     Err(anyhow::anyhow!("Blockchain not found"))
                 }
             }
-            ToBackend::GetPrivateAndPublic => Ok(Some(ToFrontend::LedgerChains {
-                private: self.private_chain.id().clone(),
-                public: self.public_chain.id().clone(),
-            })),
             ToBackend::GetIdentifications => {
                 let identifications = self.load_identifications().await?;
                 Ok(Some(ToFrontend::Identifications(identifications)))

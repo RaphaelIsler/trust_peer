@@ -23,6 +23,8 @@ pub fn App() -> Element {
         });
     });
 
+    let mut show_create = use_signal(|| false);
+
     rsx! {
         document::Stylesheet { href: asset!("/assets/main.css") }
         div { class: "app-container",
@@ -34,6 +36,7 @@ pub fn App() -> Element {
                         spawn(async move {
                             let _ = tx.send(ToBackend::Create(ident)).await;
                         });
+                        show_create.set(false);
                     },
                     on_error: move |_| {},
                 }
@@ -57,6 +60,25 @@ pub fn App() -> Element {
                             }
                         },
                         store,
+                    }
+                }
+
+                if show_create() {
+                    crate::ledger_node::identification::Create {
+                        on_create: move |ident: crate::ledger_node::Identification| {
+                            let tx = tx_backend.clone();
+                            spawn(async move {
+                                let _ = tx.send(ToBackend::Create(ident)).await;
+                            });
+                            show_create.set(false);
+                        },
+                        on_error: move |_| {},
+                    }
+                } else {
+                    button {
+                        onclick: move |_| show_create.set(true),
+                        style: "padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;",
+                        "+ Add Identity"
                     }
                 }
             }
