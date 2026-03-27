@@ -267,7 +267,7 @@ impl db::DbEntity for Connection {
     }
 }
 
-#[cfg(any(feature = "desktop", feature = "mobile"))]
+#[cfg(feature = "frontend")]
 #[component]
 pub fn ConnectionView(
     connection: Connection,

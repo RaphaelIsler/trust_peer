@@ -1,3 +1,4 @@
+use crate::i18n::{use_i18n, Key};
 use crate::money::{Money, MoneyView, MoneyViewMode};
 use anyhow::Result;
 use blockchain::{Block, BlockHeaderView, BlockLink, BlockLinkView};
@@ -41,10 +42,11 @@ impl BlockEntry {
 
 #[component]
 pub fn BlockEntryList(entries: Vec<BlockEntry>) -> Element {
+    let i18n = use_i18n();
     rsx! {
         div { class: "block-entry-list",
             if entries.is_empty() {
-                div { class: "block-entry-list__empty", "No entries" }
+                div { class: "block-entry-list__empty", "{i18n.t(Key::NoEntries)}" }
             }
             for entry in entries {
                 BlockEntryView { entry }
@@ -55,6 +57,7 @@ pub fn BlockEntryList(entries: Vec<BlockEntry>) -> Element {
 
 #[component]
 pub fn BlockEntryView(entry: BlockEntry) -> Element {
+    let i18n = use_i18n();
     match entry {
         BlockEntry::Verification {
             salt,
@@ -67,10 +70,10 @@ pub fn BlockEntryView(entry: BlockEntry) -> Element {
 
             rsx! {
                 div { class: "block-entry block-entry--verification",
-                    div { class: "block-entry__title", "Verification" }
-                    div { class: "block-entry__row", "Salt: {salt_preview}" }
-                    div { class: "block-entry__row", "Public: {public_preview}" }
-                    div { class: "block-entry__row", "Signature bytes: {signature_len}" }
+                    div { class: "block-entry__title", "{i18n.t(Key::EntryVerification)}" }
+                    div { class: "block-entry__row", "{i18n.t(Key::Salt)} {salt_preview}" }
+                    div { class: "block-entry__row", "{i18n.t(Key::PublicKey)} {public_preview}" }
+                    div { class: "block-entry__row", "{i18n.t(Key::SignatureBytes)} {signature_len}" }
                 }
             }
         }
@@ -80,16 +83,16 @@ pub fn BlockEntryView(entry: BlockEntry) -> Element {
 
             rsx! {
                 div { class: "block-entry block-entry--identification",
-                    div { class: "block-entry__title", "Identification" }
-                    div { class: "block-entry__row", "Bytes: {data_len}" }
-                    div { class: "block-entry__row", "Preview: {data_preview}" }
+                    div { class: "block-entry__title", "{i18n.t(Key::EntryIdentification)}" }
+                    div { class: "block-entry__row", "{i18n.t(Key::Bytes)} {data_len}" }
+                    div { class: "block-entry__row", "{i18n.t(Key::Preview)} {data_preview}" }
                 }
             }
         }
         BlockEntry::Link(link) => {
             rsx! {
                 div { class: "block-entry block-entry--link",
-                    div { class: "block-entry__title", "Link" }
+                    div { class: "block-entry__title", "{i18n.t(Key::EntryLink)}" }
                     BlockLinkView { link }
                 }
             }
@@ -98,13 +101,13 @@ pub fn BlockEntryView(entry: BlockEntry) -> Element {
             let timestamp = money.timestamp();
             rsx! {
                 div { class: "block-entry block-entry--current-amount",
-                    div { class: "block-entry__title", "CurrentAmount" }
+                    div { class: "block-entry__title", "{i18n.t(Key::EntryCurrentAmount)}" }
                     div { class: "block-entry__row",
-                        "Timestamp: "
+                        "{i18n.t(Key::Timestamp)} "
                         TimestampView { timestamp }
                     }
                     div { class: "block-entry__row",
-                        "Amount: "
+                        "{i18n.t(Key::Amount)} "
                         MoneyView { money, shown_amount: MoneyViewMode::Stored }
                     }
                 }
@@ -115,15 +118,16 @@ pub fn BlockEntryView(entry: BlockEntry) -> Element {
 
 #[component]
 pub fn BlockView(block: AppBlock, index: usize) -> Element {
+    let i18n = use_i18n();
     let header = block.header().clone();
     let entries = block.data().clone();
     let entry_count = entries.len();
 
     rsx! {
         section { class: "block",
-            h3 { class: "block__title", "Block #{index}" }
+            h3 { class: "block__title", "{i18n.t(Key::Block)} #{index}" }
             BlockHeaderView { header }
-            div { class: "block__meta", "Entries: {entry_count}" }
+            div { class: "block__meta", "{i18n.t(Key::Entries)} {entry_count}" }
             BlockEntryList { entries }
         }
     }
@@ -134,6 +138,7 @@ pub fn BlockView(block: AppBlock, index: usize) -> Element {
 /// and the block list otherwise.
 #[component]
 pub fn BlockChainView(blocks: Option<Vec<AppBlock>>) -> Element {
+    let i18n = use_i18n();
     let Some(blocks) = blocks else {
         return rsx! {};
     };
@@ -141,7 +146,7 @@ pub fn BlockChainView(blocks: Option<Vec<AppBlock>>) -> Element {
     rsx! {
         div { class: "blockchain",
             if blocks.is_empty() {
-                div { class: "blockchain__empty", "No blocks" }
+                div { class: "blockchain__empty", "{i18n.t(Key::NoBlocks)}" }
             }
             for (index , block) in blocks.into_iter().enumerate() {
                 BlockView { index, block }

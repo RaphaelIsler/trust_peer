@@ -10,6 +10,7 @@ pub enum ToFrontend {
         public: blockchain::blockchain::Id,
         money: Money,
         identifications: Vec<super::Identification>,
+        connection: crate::peer_connection::overview::Store,
     },
     Blocks {
         id: blockchain::blockchain::Id,

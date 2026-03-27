@@ -1,6 +1,7 @@
 //! App - Unified Dioxus Fullstack application
 
 pub mod components;
+pub mod i18n;
 mod money;
 pub mod server_fn;
 use std::path::PathBuf;

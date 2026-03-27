@@ -1,3 +1,4 @@
+use crate::i18n::{provide_i18n_context, use_i18n, Key, LanguageSelector};
 use crate::{ToBackend, ToFrontend};
 use dioxus::prelude::*;
 use std::collections::HashMap;
@@ -8,6 +9,9 @@ use tokio::sync::mpsc;
 pub fn App() -> Element {
     let tx_backend = use_context::<mpsc::Sender<ToBackend>>();
     let rx_arc = use_context::<Arc<Mutex<Option<mpsc::Receiver<ToFrontend>>>>>();
+
+    provide_i18n_context();
+    let i18n = use_i18n();
 
     let ledger_nodes = use_context_provider(|| {
         Signal::new(HashMap::<String, crate::ledger_node::frontend::Frontend>::new())
@@ -28,7 +32,10 @@ pub fn App() -> Element {
     rsx! {
         document::Stylesheet { href: asset!("/assets/main.css") }
         div { class: "app-container",
-            h1 { "TrustPeer" }
+            div { class: "app-header",
+                h1 { class: "app-title", "{i18n.t(Key::AppTitle)}" }
+                LanguageSelector {}
+            }
             if ledger_nodes().is_empty() {
                 crate::ledger_node::identification::Create {
                     on_create: move |ident: crate::ledger_node::Identification| {
@@ -76,9 +83,9 @@ pub fn App() -> Element {
                     }
                 } else {
                     button {
+                        class: "btn btn--success",
                         onclick: move |_| show_create.set(true),
-                        style: "padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;",
-                        "+ Add Identity"
+                        "{i18n.t(Key::AddIdentity)}"
                     }
                 }
             }

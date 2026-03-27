@@ -1,3 +1,4 @@
+use crate::i18n::{use_i18n, Key};
 use dioxus::prelude::*;
 
 /// JS injected into the WebView.
@@ -98,6 +99,7 @@ pub fn BarcodeScanner(
     on_scan: EventHandler<String>,
     #[props(default)] on_error: Option<EventHandler<String>>,
 ) -> Element {
+    let i18n = use_i18n();
     let mut active = use_signal(|| false);
     let mut last_code = use_signal(|| String::new());
 
@@ -145,7 +147,7 @@ pub fn BarcodeScanner(
         div { class: "barcode-scanner",
 
             if !active() {
-                button { class: "barcode-scanner__start-btn", onclick: start, "Kamera starten" }
+                button { class: "btn btn--primary barcode-scanner__start-btn", onclick: start, "{i18n.t(Key::StartCamera)}" }
             } else {
                 div { class: "barcode-scanner__viewport",
                     video {
@@ -155,11 +157,11 @@ pub fn BarcodeScanner(
                         muted: true,
                         "playsinline": "true",
                     }
-                    button { class: "barcode-scanner__stop-btn", onclick: stop, "Stoppen" }
+                    button { class: "btn btn--danger btn--sm barcode-scanner__stop-btn", onclick: stop, "{i18n.t(Key::Stop)}" }
                 }
 
                 if !last_code().is_empty() {
-                    p { class: "barcode-scanner__result", "Erkannt: {last_code}" }
+                    p { class: "barcode-scanner__result", "{i18n.t(Key::Detected)} {last_code}" }
                 }
             }
         }

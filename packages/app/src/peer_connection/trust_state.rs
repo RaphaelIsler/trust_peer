@@ -7,6 +7,7 @@ use super::Id;
 
 
 
+
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrustState {
     pub id: Id,

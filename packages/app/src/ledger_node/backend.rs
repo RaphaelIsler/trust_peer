@@ -376,6 +376,19 @@ impl Internal {
         Ok(())
     }
 
+    fn create_connection_overview(&self) -> peer_connection::overview::Store {
+        peer_connection::overview::Store {
+            strong: peer_connection::overview::State {
+                count: self.user_connections.len(),
+                warning_level: peer_connection::WarningLevel::Ok,
+            },
+            weak: peer_connection::overview::State {
+                count: self.user_connections.len(),
+                warning_level: peer_connection::WarningLevel::Ok,
+            },
+        }
+    }
+
     async fn on_connection_event(&mut self, event: con::Msg) {
         match event {
             con::Msg::NewConnectionEstablished {
@@ -519,6 +532,7 @@ impl Internal {
                     public: self.public_chain.id().clone(),
                     money: self.current,
                     identifications,
+                    connection: self.create_connection_overview(),
                 }))
             }
             ToBackend::GetBlocks {

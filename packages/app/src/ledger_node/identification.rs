@@ -57,6 +57,7 @@ impl Identification {
 #[path = "."]
 mod m_frontend {
     use super::*;
+    use crate::i18n::{use_i18n, Key};
     use dioxus::prelude::*;
 
     #[component]
@@ -64,6 +65,7 @@ mod m_frontend {
         on_create: EventHandler<Identification>,
         on_error: EventHandler<String>,
     ) -> Element {
+        let i18n = use_i18n();
         let mut first_name = use_signal(|| String::new());
         let mut last_name = use_signal(|| String::new());
         let mut middle_name = use_signal(|| String::new());
@@ -76,14 +78,14 @@ mod m_frontend {
             let date_str = birth_date();
 
             if first.trim().is_empty() || last.trim().is_empty() || date_str.trim().is_empty() {
-                on_error.call("Please fill in all required fields".to_string());
+                on_error.call(i18n.t(Key::FillRequiredFields).to_string());
                 return;
             }
 
             let date = match chrono::NaiveDate::parse_from_str(&date_str, "%Y-%m-%d") {
                 Ok(d) => d,
                 Err(_) => {
-                    on_error.call("Invalid date format. Use YYYY-MM-DD".to_string());
+                    on_error.call(i18n.t(Key::InvalidDateFormat).to_string());
                     return;
                 }
             };
@@ -103,67 +105,52 @@ mod m_frontend {
         };
 
         rsx! {
-            div {
-                class: "user-form",
-                style: "background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 8px;",
+            div { class: "form-card",
+                h3 { "{i18n.t(Key::CreateNewIdentity)}" }
 
-                h3 { "Create New Identity" }
-
-                div { style: "margin: 10px 0;",
-                    label { style: "display: block; margin-bottom: 5px; font-weight: bold;",
-                        "First Name *"
-                    }
+                div { class: "form-group",
+                    label { class: "form-label", "{i18n.t(Key::FirstName)}" }
                     input {
+                        class: "form-input",
                         r#type: "text",
                         value: "{first_name}",
                         oninput: move |e| first_name.set(e.value()),
-                        style: "width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;",
-                        placeholder: "Max",
                     }
                 }
-
-                div { style: "margin: 10px 0;",
-                    label { style: "display: block; margin-bottom: 5px; font-weight: bold;",
-                        "Last Name *"
-                    }
+                div { class: "form-group",
+                    label { class: "form-label", "{i18n.t(Key::LastName)}" }
                     input {
+                        class: "form-input",
                         r#type: "text",
                         value: "{last_name}",
                         oninput: move |e| last_name.set(e.value()),
-                        style: "width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;",
-                        placeholder: "Mustermann",
                     }
                 }
-
-                div { style: "margin: 10px 0;",
-                    label { style: "display: block; margin-bottom: 5px; font-weight: bold;",
-                        "Middle Name (optional)"
-                    }
+                div { class: "form-group",
+                    label { class: "form-label", "{i18n.t(Key::MiddleName)}" }
                     input {
+                        class: "form-input",
                         r#type: "text",
                         value: "{middle_name}",
                         oninput: move |e| middle_name.set(e.value()),
-                        style: "width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;",
-                        placeholder: "Alexander",
                     }
                 }
-
-                div { style: "margin: 10px 0;",
-                    label { style: "display: block; margin-bottom: 5px; font-weight: bold;",
-                        "Date of Birth * (YYYY-MM-DD)"
-                    }
+                div { class: "form-group",
+                    label { class: "form-label", "{i18n.t(Key::DateOfBirth)}" }
                     input {
+                        class: "form-input",
                         r#type: "date",
                         value: "{birth_date}",
                         oninput: move |e| birth_date.set(e.value()),
-                        style: "width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;",
                     }
                 }
 
-                button {
-                    onclick: handle_submit,
-                    style: "padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;",
-                    "Create"
+                div { class: "form-actions",
+                    button {
+                        class: "btn btn--success",
+                        onclick: handle_submit,
+                        "{i18n.t(Key::CreateBtn)}"
+                    }
                 }
             }
         }
@@ -179,14 +166,12 @@ mod m_frontend {
                 birth_date,
             } => {
                 rsx! {
-                    div {
-                        class: "identification",
-                        style: "padding: 8px 0;",
-                        span { "{first_name} {last_name}" }
+                    div { class: "identification",
+                        span { class: "identification__name", "{first_name} {last_name}" }
                         if let Some(mn) = &middle_name {
-                            span { style: "color: #666;", " ({mn})" }
+                            span { class: "identification__middle", "({mn})" }
                         }
-                        span { style: "color: #666; font-size: 0.9em;", " · {birth_date}" }
+                        span { class: "identification__birth", "· {birth_date}" }
                     }
                 }
             }

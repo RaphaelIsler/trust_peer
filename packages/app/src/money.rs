@@ -1,5 +1,7 @@
 use core_types::{Timestamp, Q32_32};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
+use crate::i18n::{use_i18n, Key};
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 #[cfg(any(feature = "desktop", feature = "mobile"))]
@@ -111,53 +113,64 @@ impl core::ops::Add for Money {
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum MoneyViewMode {
+    /// Always display the live (time-decayed) amount. No selector shown.
     Current,
+    /// Always display the stored (snapshot) amount. No selector shown.
     Stored,
+    /// Show a dropdown that lets the user switch between current and stored.
+    UserChoice,
 }
 
 #[cfg(any(feature = "desktop", feature = "mobile"))]
 #[component]
 pub fn MoneyView(money: Money, shown_amount: MoneyViewMode) -> Element {
-    let mut mode = use_signal(move || shown_amount);
-    let mut current_amount = use_signal(move || money.on_time(Timestamp::now()).amount);
+    let i18n = use_i18n();
 
-    use_effect(move || {
-        mode.set(shown_amount);
-    });
+    // Tracks the user's selection when shown_amount == UserChoice.
+    let mut user_mode = use_signal(|| MoneyViewMode::Current);
 
+    // A tick counter whose only job is to trigger a re-render every 9 seconds.
+    // The render function reads `money` directly from the prop, which is always fresh —
+    // no need to mirror money into a signal or maintain a derived signal chain.
+    let mut tick = use_signal(|| 0u64);
     use_future(move || async move {
         loop {
             sleep(Duration::from_secs(9)).await;
-
-            if mode() == MoneyViewMode::Current {
-                current_amount.set(money.on_time(Timestamp::now()).amount);
-            }
+            tick.set(tick() + 1);
         }
     });
 
-    let shown_amount = match mode() {
-        MoneyViewMode::Current => current_amount().to_u64_floor().to_string(),
+    let active_mode = match shown_amount {
+        MoneyViewMode::UserChoice => user_mode(),
+        fixed => fixed,
+    };
+
+    let display = match active_mode {
+        MoneyViewMode::Current => {
+            let _ = tick(); // subscribe so this re-evaluates on every tick
+            money.on_time(Timestamp::now()).amount.to_u64_floor().to_string()
+        }
         MoneyViewMode::Stored => money.amount.to_string(),
+        MoneyViewMode::UserChoice => unreachable!(),
     };
 
     rsx! {
-        span {
-            class: "money-view",
-            style: "display: inline-flex; gap: 8px; align-items: center;",
-            select {
-                value: if mode() == MoneyViewMode::Current { "current" } else { "stored" },
-                onchange: move |event| {
-                    if event.value() == "current" {
-                        mode.set(MoneyViewMode::Current);
-                        current_amount.set(money.on_time(Timestamp::now()).amount);
-                    } else {
-                        mode.set(MoneyViewMode::Stored);
-                    }
-                },
-                option { value: "current", "aktuell" }
-                option { value: "stored", "gespeichert" }
+        span { class: "money-view",
+            if shown_amount == MoneyViewMode::UserChoice {
+                select {
+                    value: if user_mode() == MoneyViewMode::Current { "current" } else { "stored" },
+                    onchange: move |e| {
+                        if e.value() == "current" {
+                            user_mode.set(MoneyViewMode::Current);
+                        } else {
+                            user_mode.set(MoneyViewMode::Stored);
+                        }
+                    },
+                    option { value: "current", "{i18n.t(Key::MoneyCurrent)}" }
+                    option { value: "stored", "{i18n.t(Key::MoneyStored)}" }
+                }
             }
-            span { "{shown_amount}" }
+            span { class: "money-view__amount", "{display}" }
         }
     }
 }
