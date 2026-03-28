@@ -71,6 +71,8 @@ impl Service {
                     .with_peer_id(web_rtc.own_id)
                     .with_timeout(30);
 
+            to_ledger.connection_state(id.clone(), "Connecting over Signaling Server", 0.0).await;
+
             let mut p2p = P2pWebRtc::new(config);
             let data_channel = match p2p.connect().await {
                 Ok(data_channel) => data_channel,
@@ -79,6 +81,7 @@ impl Service {
                     return Ok::<(), anyhow::Error>(());
                 }
             };
+            to_ledger.connection_state(id.clone(), "Connected to other Node", 0.1).await;
 
             let mut internal = Internal {
                 id: id,
@@ -106,8 +109,13 @@ impl Internal {
     }
 
     async fn handle_msg(&mut self, msg: P2P) {
+        log::info!("Received message from other node: {:?}", serde_json::to_string(&msg));
         match msg {
-            P2P::Hello => {}
+            P2P::Hello => {
+                self.to_ledger.connection_state(self.id.clone(), "Hello Sayed", 0.2).await;
+//                if self.state.is_none() {
+//                }
+            }
             P2P::IAm {
                 private,
                 public,

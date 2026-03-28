@@ -1,4 +1,5 @@
 use crate::i18n::{use_i18n, Key};
+use dioxus::document::eval;
 use dioxus::prelude::*;
 
 /// JS injected into the WebView.

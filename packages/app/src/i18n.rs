@@ -67,6 +67,18 @@ pub enum Key {
     StartCamera,
     Stop,
     Detected,
+
+    // Peer connections
+    Back,
+    NoConnections,
+    NewConnection,
+    InitiateConnection,
+    RespondToConnection,
+    WaitingForIds,
+    WaitingForConnection,
+    ConnectionFailed,
+    ConnectionName,
+    Save,
 }
 
 /// Returns the translated string for `key` in the given `lang`.
@@ -117,6 +129,16 @@ fn en(key: Key) -> &'static str {
         Key::StartCamera => "Start Camera",
         Key::Stop => "Stop",
         Key::Detected => "Detected:",
+        Key::Back => "Back",
+        Key::NoConnections => "No connections",
+        Key::NewConnection => "New connection",
+        Key::InitiateConnection => "Initiate connection",
+        Key::RespondToConnection => "Enter connection data",
+        Key::WaitingForIds => "Waiting for connection IDs…",
+        Key::WaitingForConnection => "Connecting…",
+        Key::ConnectionFailed => "Connection setup failed",
+        Key::ConnectionName => "Connection name",
+        Key::Save => "Save",
     }
 }
 
@@ -160,6 +182,16 @@ fn de(key: Key) -> &'static str {
         Key::StartCamera => "Kamera starten",
         Key::Stop => "Stoppen",
         Key::Detected => "Erkannt:",
+        Key::Back => "Zurück",
+        Key::NoConnections => "Keine Verbindungen",
+        Key::NewConnection => "Neue Verbindung",
+        Key::InitiateConnection => "Verbindung initiieren",
+        Key::RespondToConnection => "Verbindungsdaten eingeben",
+        Key::WaitingForIds => "Warte auf Verbindungs-IDs…",
+        Key::WaitingForConnection => "Verbindung wird aufgebaut…",
+        Key::ConnectionFailed => "Verbindungsaufbau fehlgeschlagen",
+        Key::ConnectionName => "Verbindungsname",
+        Key::Save => "Speichern",
     }
 }
 

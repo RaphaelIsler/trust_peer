@@ -16,7 +16,7 @@ pub struct Store{
 
 #[cfg(feature = "frontend")]
 #[component]
-pub fn Overview(
+pub fn Compact(
     store: Store,
 ) -> Element {
     return rsx!(

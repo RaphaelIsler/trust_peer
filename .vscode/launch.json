@@ -30,9 +30,9 @@
             "type": "lldb",
             "request": "launch",
             "name": "Run Desktop",
-            "program": "${workspaceFolder}/target/debug/desktop",
+            "program": "${workspaceFolder}/target/dx/desktop/debug/linux/app/desktop",
             "args": [],
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/target/dx/desktop/debug/linux/app",
             "preLaunchTask": "Build: app (desktop)",
             "env": {
                 "LD_PRELOAD": "/lib/x86_64-linux-gnu/libpthread.so.0"
@@ -94,13 +94,11 @@
                 "--bin",
                 "desktop",
                 "--features",
-                "desktop",
-                "--package",
-                "app"
+                "desktop"
             ],
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/packages/app",
             "console": "integratedTerminal",
-           "env": {
+            "env": {
                 "LD_PRELOAD": "/lib/x86_64-linux-gnu/libpthread.so.0"
             }
         },

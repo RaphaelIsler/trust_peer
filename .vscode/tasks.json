@@ -20,10 +20,32 @@
             "problemMatcher": ["$rustc"]
         },
         {
+            "label": "Serve: app (desktop)",
+            "type": "shell",
+            "command": "dx",
+            "args": ["serve", "--bin", "desktop", "--features", "desktop", "--platform", "desktop"],
+            "options": {"cwd": "${workspaceFolder}/packages/app"},
+            "group": "build",
+            "isBackground": true,
+            "presentation": {"reveal": "always", "panel": "dedicated"},
+            "problemMatcher": ["$rustc"]
+        },
+        {
             "label": "Build: app (desktop)",
             "type": "shell",
-            "command": "cargo",
-            "args": ["build", "-p", "app", "--features", "desktop", "--bin", "desktop"],
+            "command": "dx",
+            "args": ["build", "--bin", "desktop", "--features", "desktop", "--platform", "desktop"],
+            "options": {"cwd": "${workspaceFolder}/packages/app"},
+            "group": "build",
+            "presentation": {"reveal": "always", "panel": "dedicated"},
+            "problemMatcher": ["$rustc"]
+        },
+        {
+            "label": "Build: app (desktop, release)",
+            "type": "shell",
+            "command": "dx",
+            "args": ["build", "--bin", "desktop", "--features", "desktop", "--platform", "desktop", "--release"],
+            "options": {"cwd": "${workspaceFolder}/packages/app"},
             "group": "build",
             "presentation": {"reveal": "always", "panel": "dedicated"},
             "problemMatcher": ["$rustc"]
@@ -31,8 +53,9 @@
         {
             "label": "Build: app (mobile)",
             "type": "shell",
-            "command": "cargo",
-            "args": ["build", "-p", "app", "--features", "mobile", "--bin", "mobile"],
+            "command": "dx",
+            "args": ["build", "--bin", "mobile", "--features", "mobile", "--platform", "android"],
+            "options": {"cwd": "${workspaceFolder}/packages/app"},
             "group": "build",
             "presentation": {"reveal": "always", "panel": "dedicated"},
             "problemMatcher": ["$rustc"]

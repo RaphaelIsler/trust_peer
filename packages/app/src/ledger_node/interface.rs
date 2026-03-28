@@ -10,7 +10,7 @@ pub enum ToFrontend {
         public: blockchain::blockchain::Id,
         money: Money,
         identifications: Vec<super::Identification>,
-        connection: crate::peer_connection::overview::Store,
+        connection: crate::peer_connection::compact::Store,
     },
     Blocks {
         id: blockchain::blockchain::Id,
@@ -20,6 +20,11 @@ pub enum ToFrontend {
     ConnectionsIds {
         new_connection_id: u8,
         ids: WebRtcIds,
+    },
+    ConnectionState{
+        new_connection_id: u8,
+        current_working: String,
+        percentage: f32,
     },
     ConnectionEstablished {
         new_connection_id: u8,

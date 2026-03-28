@@ -2,6 +2,7 @@ use crate::block_entry::{AppBlock, BlockEntry};
 use crate::ledger_node::{identification::Identification, ToBackend, ToFrontend};
 use crate::money::Money;
 use crate::peer_connection;
+use crate::peer_connection::components::new_connection;
 use crate::peer_connection::{Connection as PeerConnection, WebRtcIds};
 use crate::{KeyValue, Value};
 use anyhow::Result;
@@ -29,6 +30,11 @@ pub mod con {
             orig: u8,
             connection_id: blockchain::Id,
             web_rtc_ids: WebRtcIds,
+        },
+        ConnectionState{
+            new_connection_id: Id,
+            current_working: String,
+            percentage: f32,
         },
         NameAcceptRequired {
             connection_id: blockchain::Id,
@@ -376,13 +382,13 @@ impl Internal {
         Ok(())
     }
 
-    fn create_connection_overview(&self) -> peer_connection::overview::Store {
-        peer_connection::overview::Store {
-            strong: peer_connection::overview::State {
+    fn create_connection_overview(&self) -> peer_connection::compact::Store {
+        peer_connection::compact::Store {
+            strong: peer_connection::compact::State {
                 count: self.user_connections.len(),
                 warning_level: peer_connection::WarningLevel::Ok,
             },
-            weak: peer_connection::overview::State {
+            weak: peer_connection::compact::State {
                 count: self.user_connections.len(),
                 warning_level: peer_connection::WarningLevel::Ok,
             },
@@ -423,6 +429,14 @@ impl Internal {
                             connection: connection.clone(),
                         })
                         .await;
+                }
+            }
+
+            con::Msg::ConnectionState { new_connection_id, current_working, percentage } => {
+                if let crate::peer_connection::handler::Id::Creating(new_connection_id) = new_connection_id{
+                    let _ = self
+                        .event_tx
+                        .send(AsyncEvent::FrontendEvent(ToFrontend::ConnectionState { new_connection_id, current_working, percentage })).await;
                 }
             }
 
@@ -573,7 +587,7 @@ impl Internal {
                 ));
 
                 Ok(Some(ToFrontend::ConnectionsIds {
-                    new_connection_id: self.init_id,
+                    new_connection_id,
                     ids: ids.clone(),
                 }))
             }

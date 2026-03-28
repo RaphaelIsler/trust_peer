@@ -1,4 +1,3 @@
-use app::P2PTestComponent;
 use dioxus::prelude::*;
 
 use app::{App, ToBackend, ToFrontend};
@@ -7,7 +6,7 @@ use tokio::sync::mpsc;
 
 #[tokio::main]
 async fn main() {
-    // Initialize logging
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let (tx_backend, rx_backend) = mpsc::channel::<ToBackend>(64);
     let (tx_frontend, rx_frontend) = mpsc::channel::<ToFrontend>(64);
 

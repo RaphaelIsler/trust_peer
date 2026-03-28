@@ -9,3 +9,6 @@ pub mod backend;
 
 #[cfg(feature = "frontend")]
 pub mod frontend;
+
+#[cfg(feature = "frontend")]
+pub mod components;

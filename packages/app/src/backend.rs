@@ -159,6 +159,7 @@ impl Service {
     }
 
     async fn handle_frontend(&mut self, message: ToBackend) -> Result<Option<ToFrontend>> {
+        log::info!("Received message from frontend: {:?}", serde_json::to_string(&message)?);
         Ok(match message {
             ToBackend::Init => Some(ToFrontend::Init(self.build_init_entries().await?)),
             ToBackend::Create(identification) => {

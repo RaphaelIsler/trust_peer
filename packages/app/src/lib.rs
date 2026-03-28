@@ -54,7 +54,7 @@ pub use b::*;
 #[path = "."]
 mod f {
     mod frontend;
-    pub use frontend::App;
+    pub use frontend::{App, Route};
 }
 
 #[cfg(feature = "frontend")]

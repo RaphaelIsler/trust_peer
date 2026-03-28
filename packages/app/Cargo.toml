@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-dioxus = { workspace = true, features = ["fullstack"] }
+dioxus = { workspace = true, features = ["fullstack", "router"] }
 core_types = { path = "../core_types" }
 crypto = { path = "../crypto", optional = true }
 blockchain = { path = "../blockchain", optional = true }
@@ -23,12 +23,13 @@ sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 helper = { workspace = true, features = ["uuid", "sqlx", "service"], optional = true }
 uuid = { workspace = true, features = ["v4"] }
+qrcode = { version = "0.14", optional = true }
 
 
 [features]
 default = ["chrono"]
 backend =  ["tokio", "p2p_webrtc", "db", "blockchain", "crypto", "sqlx", "thiserror", "helper", "core_types/desktop", "core_types/sqlite"]
-frontend = []
+frontend = ["qrcode"]
 server = ["dioxus/server", "tokio", "crypto", "blockchain"]
 web = ["dioxus/web"]
 desktop = ["dioxus/desktop", "backend", "frontend"]
